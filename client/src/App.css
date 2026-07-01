@@ -1534,11 +1534,6 @@
   box-shadow: 0 0 20px color-mix(in srgb, var(--accent-violet) 20%, transparent);
 }
 
-.area-nav__btn--active[data-area='jobs'] {
-  border-color: color-mix(in srgb, var(--accent-magenta) 50%, transparent);
-  box-shadow: 0 0 20px color-mix(in srgb, var(--accent-magenta) 22%, transparent);
-}
-
 .area-nav__btn--active[data-area='health'] {
   border-color: color-mix(in srgb, var(--accent-lime) 45%, transparent);
   box-shadow: 0 0 20px color-mix(in srgb, var(--accent-lime) 18%, transparent);
@@ -1785,6 +1780,14 @@
   display: flex;
   flex-direction: column;
   gap: var(--stack-gap);
+}
+
+.job-tracker-area--nested {
+  gap: calc(var(--stack-gap) * 0.75);
+}
+
+.job-tracker-area--nested .view-tabs--nested {
+  margin-top: 0;
 }
 
 .area-placeholder {

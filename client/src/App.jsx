@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { RefreshCw, LayoutGrid, Heart, Sparkles, Users, Briefcase, Compass, Target } from 'lucide-react';
+import { RefreshCw, LayoutGrid, Heart, Sparkles, Users, Briefcase, Compass } from 'lucide-react';
 import LifeOverview from './components/LifeOverview';
 import CompassEditor from './components/CompassEditor';
-import JobTrackerArea from './components/JobTrackerArea';
 import HwplAreaTab from './components/HwplAreaTab';
 import AuthPanel from './components/AuthPanel';
 import { useApplications, useHealth, useAuth, useLifeDesign } from './hooks';
@@ -12,7 +11,6 @@ import './App.css';
 const AREA_ICONS = {
   overview: LayoutGrid,
   compass: Compass,
-  jobs: Target,
   work: Briefcase,
   health: Heart,
   play: Sparkles,
@@ -49,6 +47,7 @@ export default function App() {
   const [areaVoiceProcessing, setAreaVoiceProcessing] = useState(false);
   const [areaVoiceSummary, setAreaVoiceSummary] = useState(null);
   const [area, setArea] = useState('overview');
+  const [workSubTab, setWorkSubTab] = useState('dashboard');
 
   const handleJobVoiceSubmit = async (transcript) => {
     setJobVoiceProcessing(true);
@@ -77,17 +76,36 @@ export default function App() {
     }
   };
 
-  const navigate = (nextArea) => {
+  const navigate = (nextArea, subTab) => {
     setArea(nextArea);
     setAreaVoiceSummary(null);
+    setJobVoiceSummary(null);
+    if (nextArea === 'work' && subTab) {
+      setWorkSubTab(subTab);
+    } else if (nextArea !== 'work') {
+      setWorkSubTab('dashboard');
+    }
   };
 
   const navItems = [
     { id: 'overview', label: 'Overview' },
     { id: 'compass', label: 'Compass' },
-    { id: 'jobs', label: 'Job tracker' },
     ...LIFE_AREAS.map((a) => ({ id: a.id, label: a.label })),
   ];
+
+  const jobTrackerProps = {
+    applications,
+    loading,
+    error,
+    dataSource,
+    isAuthenticated,
+    onUpdateApplication: updateApplication,
+    onClearExamples: clearExamples,
+    onResetExamples: resetToExamples,
+    onVoiceSubmit: handleJobVoiceSubmit,
+    voiceProcessing: jobVoiceProcessing,
+    voiceSummary: jobVoiceSummary,
+  };
 
   return (
     <div className="app">
@@ -111,7 +129,7 @@ export default function App() {
             {aiEnabled ? 'AI parsing on' : 'Heuristic mode'}
           </span>
           <AuthPanel />
-          {area === 'jobs' && (
+          {area === 'work' && workSubTab === 'job-search' && (
             <button type="button" className="icon-btn" onClick={refresh} aria-label="Refresh">
               <RefreshCw size={18} />
             </button>
@@ -131,6 +149,8 @@ export default function App() {
               onClick={() => {
                 setArea(id);
                 setAreaVoiceSummary(null);
+                setJobVoiceSummary(null);
+                if (id !== 'work') setWorkSubTab('dashboard');
               }}
             >
               <Icon size={16} />
@@ -158,22 +178,6 @@ export default function App() {
           />
         )}
 
-        {area === 'jobs' && (
-          <JobTrackerArea
-            applications={applications}
-            loading={loading}
-            error={error}
-            dataSource={dataSource}
-            isAuthenticated={isAuthenticated}
-            onUpdateApplication={updateApplication}
-            onClearExamples={clearExamples}
-            onResetExamples={resetToExamples}
-            onVoiceSubmit={handleJobVoiceSubmit}
-            voiceProcessing={jobVoiceProcessing}
-            voiceSummary={jobVoiceSummary}
-          />
-        )}
-
         {HWPL_TABS.includes(area) && (
           <HwplAreaTab
             areaId={area}
@@ -185,6 +189,9 @@ export default function App() {
             onVoiceSubmit={handleAreaVoiceSubmit}
             voiceProcessing={areaVoiceProcessing}
             voiceSummary={areaVoiceSummary}
+            initialTab={area === 'work' ? workSubTab : 'dashboard'}
+            onTabChange={area === 'work' ? setWorkSubTab : undefined}
+            jobTracker={area === 'work' ? jobTrackerProps : undefined}
           />
         )}
       </main>

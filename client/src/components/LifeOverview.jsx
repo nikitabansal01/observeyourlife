@@ -53,9 +53,16 @@ export default function LifeOverview({ data, onGaugeChange, onNoteChange, onNavi
               onChange={(e) => onNoteChange(area.id, e.target.value)}
               rows={2}
             />
-            <button type="button" className="hwpl-card__link" onClick={() => onNavigate(area.id)}>
-              Open {area.label} →
-            </button>
+            <div className="hwpl-card__links">
+              <button type="button" className="hwpl-card__link" onClick={() => onNavigate(area.id)}>
+                Open {area.label} →
+              </button>
+              {area.id === 'work' && (
+                <button type="button" className="hwpl-card__link" onClick={() => onNavigate('work', 'job-search')}>
+                  Job search →
+                </button>
+              )}
+            </div>
           </div>
         ))}
         </div>

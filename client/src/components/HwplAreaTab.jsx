@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Trash2, Mic, Plus } from 'lucide-react';
 import VoiceDump from './VoiceDump';
+import JobTrackerArea from './JobTrackerArea';
 import { LIFE_AREAS, AREA_TAB_CONFIG } from '../lifeDesign';
 
 function formatDate(iso) {
@@ -102,16 +103,31 @@ export default function HwplAreaTab({
   onVoiceSubmit,
   voiceProcessing,
   voiceSummary,
+  initialTab = 'dashboard',
+  onTabChange,
+  jobTracker,
 }) {
   const area = LIFE_AREAS.find((a) => a.id === areaId);
   const config = AREA_TAB_CONFIG[areaId];
   const entries = data.areaLogs[areaId] || [];
+  const hasJobSearch = areaId === 'work' && jobTracker;
 
-  const [tab, setTab] = useState('dashboard');
+  const [tab, setTab] = useState(initialTab);
   const [draft, setDraft] = useState('');
   const [extraValue, setExtraValue] = useState(areaId === 'health' ? 3 : '');
 
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
+
   if (!area || !config) return null;
+
+  const isJobSearch = hasJobSearch && tab === 'job-search';
+
+  const handleTabChange = (nextTab) => {
+    setTab(nextTab);
+    onTabChange?.(nextTab);
+  };
 
   const handleManualSubmit = (e) => {
     e.preventDefault();
@@ -138,13 +154,13 @@ export default function HwplAreaTab({
 
       <div className="ui-block ui-block--capture">
         <VoiceDump
-          onSubmit={onVoiceSubmit}
-          processing={voiceProcessing}
-          currentArea={areaId}
+          onSubmit={isJobSearch ? jobTracker.onVoiceSubmit : onVoiceSubmit}
+          processing={isJobSearch ? jobTracker.voiceProcessing : voiceProcessing}
+          currentArea={isJobSearch ? 'jobs' : areaId}
         />
-        {voiceSummary && (
+        {(isJobSearch ? jobTracker.voiceSummary : voiceSummary) && (
           <div className="toast hwpl-area-tab__toast" role="status">
-            {voiceSummary}
+            {isJobSearch ? jobTracker.voiceSummary : voiceSummary}
           </div>
         )}
       </div>
@@ -153,21 +169,32 @@ export default function HwplAreaTab({
         <button
           type="button"
           className={`view-tab ${tab === 'dashboard' ? 'view-tab--active' : ''}`}
-          onClick={() => setTab('dashboard')}
+          onClick={() => handleTabChange('dashboard')}
         >
           Dashboard
         </button>
         <button
           type="button"
           className={`view-tab ${tab === 'log' ? 'view-tab--active' : ''}`}
-          onClick={() => setTab('log')}
+          onClick={() => handleTabChange('log')}
         >
           {config.logLabel}
           {entries.length > 0 && <span className="view-tab__count">{entries.length}</span>}
         </button>
+        {hasJobSearch && (
+          <button
+            type="button"
+            className={`view-tab ${tab === 'job-search' ? 'view-tab--active' : ''}`}
+            onClick={() => handleTabChange('job-search')}
+          >
+            Job search
+          </button>
+        )}
       </nav>
 
-      {tab === 'dashboard' ? (
+      {tab === 'job-search' && hasJobSearch ? (
+        <JobTrackerArea nested {...jobTracker} />
+      ) : tab === 'dashboard' ? (
         <div className="ui-stack">
           <div className="ui-block hwpl-area-tab__dashboard">
             <h3 className="ui-block__label">How full is {area.label.toLowerCase()}?</h3>
@@ -189,7 +216,7 @@ export default function HwplAreaTab({
             <div className="ui-block hwpl-area-tab__recent">
               <div className="hwpl-area-tab__recent-header">
                 <h3 className="ui-block__label">Recent {config.logLabel.toLowerCase()}</h3>
-                <button type="button" className="hwpl-card__link" onClick={() => setTab('log')}>
+                <button type="button" className="hwpl-card__link" onClick={() => handleTabChange('log')}>
                   View all →
                 </button>
               </div>

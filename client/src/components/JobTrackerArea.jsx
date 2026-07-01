@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { LayoutGrid, Building2 } from 'lucide-react';
 import Dashboard from './Dashboard';
 import CompanyBrowser from './CompanyBrowser';
-import VoiceDump from './VoiceDump';
 import DataSourceBanner from './DataSourceBanner';
 
 export default function JobTrackerArea({
@@ -14,31 +13,22 @@ export default function JobTrackerArea({
   onUpdateApplication,
   onClearExamples,
   onResetExamples,
-  onVoiceSubmit,
-  voiceProcessing,
-  voiceSummary,
+  nested = false,
 }) {
   const [jobTab, setJobTab] = useState('pipeline');
 
   return (
-    <section className="job-tracker-area">
-      <header className="ui-section ui-section--header job-tracker-area__intro">
-        <h2>Job tracker</h2>
-        <p>
-          Your pipeline at a glance — voice-dump interviews, status changes, and next steps to keep everything current.
-        </p>
-      </header>
+    <section className={`job-tracker-area ${nested ? 'job-tracker-area--nested' : ''}`}>
+      {!nested && (
+        <header className="ui-section ui-section--header job-tracker-area__intro">
+          <h2>Job search</h2>
+          <p>
+            Your pipeline at a glance — voice-dump interviews, status changes, and next steps to keep everything current.
+          </p>
+        </header>
+      )}
 
-      <div className="ui-block ui-block--capture">
-        <VoiceDump onSubmit={onVoiceSubmit} processing={voiceProcessing} currentArea="jobs" />
-        {voiceSummary && (
-          <div className="toast job-tracker-area__toast" role="status">
-            {voiceSummary}
-          </div>
-        )}
-      </div>
-
-      <nav className="view-tabs view-tabs--nested ui-section ui-section--nav" aria-label="Job tracker views">
+      <nav className="view-tabs view-tabs--nested ui-section ui-section--nav" aria-label="Job search views">
         <button
           type="button"
           className={`view-tab ${jobTab === 'pipeline' ? 'view-tab--active' : ''}`}

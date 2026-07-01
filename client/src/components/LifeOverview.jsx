@@ -20,10 +20,6 @@ function GaugeBar({ area, value, onChange }) {
         style={{ '--gauge-color': area.color }}
         aria-label={`${area.label} fullness`}
       />
-      <div
-        className="hwpl-gauge__fill"
-        style={{ width: `${value}%`, background: area.color }}
-      />
     </div>
   );
 }

@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { RefreshCw, LayoutGrid, Heart, Sparkles, Users, Briefcase, Compass } from 'lucide-react';
+import { RefreshCw, LayoutGrid, Heart, Sparkles, Users, Briefcase, Compass, Target } from 'lucide-react';
 import LifeOverview from './components/LifeOverview';
 import CompassEditor from './components/CompassEditor';
-import WorkArea from './components/WorkArea';
-import AreaPlaceholder from './components/AreaPlaceholder';
+import JobTrackerArea from './components/JobTrackerArea';
+import HwplAreaTab from './components/HwplAreaTab';
 import AuthPanel from './components/AuthPanel';
-import VoiceDump from './components/VoiceDump';
 import { useApplications, useHealth, useAuth, useLifeDesign } from './hooks';
 import { LIFE_AREAS } from './lifeDesign';
 import './App.css';
@@ -13,11 +12,14 @@ import './App.css';
 const AREA_ICONS = {
   overview: LayoutGrid,
   compass: Compass,
+  jobs: Target,
   work: Briefcase,
   health: Heart,
   play: Sparkles,
   love: Users,
 };
+
+const HWPL_TABS = LIFE_AREAS.map((a) => a.id);
 
 export default function App() {
   const { isAuthenticated } = useAuth();
@@ -32,34 +34,58 @@ export default function App() {
     clearExamples,
     resetToExamples,
   } = useApplications();
-  const { data: lifeDesign, setGauge, setGaugeNote, setWorkview, setLifeview } = useLifeDesign();
+  const {
+    data: lifeDesign,
+    setGauge,
+    setGaugeNote,
+    setWorkview,
+    setLifeview,
+    addAreaLogEntry,
+    deleteAreaLogEntry,
+  } = useLifeDesign();
   const { aiEnabled } = useHealth();
-  const [processing, setProcessing] = useState(false);
-  const [lastSummary, setLastSummary] = useState(null);
+  const [jobVoiceProcessing, setJobVoiceProcessing] = useState(false);
+  const [jobVoiceSummary, setJobVoiceSummary] = useState(null);
+  const [areaVoiceProcessing, setAreaVoiceProcessing] = useState(false);
+  const [areaVoiceSummary, setAreaVoiceSummary] = useState(null);
   const [area, setArea] = useState('overview');
-  const [workTab, setWorkTab] = useState('pipeline');
 
-  const handleVoiceSubmit = async (transcript) => {
-    setProcessing(true);
-    setLastSummary(null);
+  const handleJobVoiceSubmit = async (transcript) => {
+    setJobVoiceProcessing(true);
+    setJobVoiceSummary(null);
     try {
       const result = await submitVoiceDump(transcript);
-      setLastSummary(result.summary);
+      setJobVoiceSummary(result.summary);
     } catch (e) {
-      setLastSummary(`Error: ${e.message}`);
+      setJobVoiceSummary(`Error: ${e.message}`);
     } finally {
-      setProcessing(false);
+      setJobVoiceProcessing(false);
     }
   };
 
-  const navigate = (nextArea, nextWorkTab = 'pipeline') => {
+  const handleAreaVoiceSubmit = async (transcript) => {
+    if (!HWPL_TABS.includes(area)) return;
+
+    setAreaVoiceProcessing(true);
+    setAreaVoiceSummary(null);
+    try {
+      addAreaLogEntry(area, { text: transcript, source: 'voice' });
+      const label = LIFE_AREAS.find((a) => a.id === area)?.label || area;
+      setAreaVoiceSummary(`Saved to your ${label.toLowerCase()} log.`);
+    } finally {
+      setAreaVoiceProcessing(false);
+    }
+  };
+
+  const navigate = (nextArea) => {
     setArea(nextArea);
-    if (nextArea === 'work') setWorkTab(nextWorkTab);
+    setAreaVoiceSummary(null);
   };
 
   const navItems = [
     { id: 'overview', label: 'Overview' },
     { id: 'compass', label: 'Compass' },
+    { id: 'jobs', label: 'Job tracker' },
     ...LIFE_AREAS.map((a) => ({ id: a.id, label: a.label })),
   ];
 
@@ -68,6 +94,7 @@ export default function App() {
       <div className="bg-glow bg-glow--1" />
       <div className="bg-glow bg-glow--2" />
       <div className="bg-glow bg-glow--3" />
+      <div className="bg-glow bg-glow--4" />
 
       <header className="header">
         <div className="header__brand">
@@ -84,7 +111,7 @@ export default function App() {
             {aiEnabled ? 'AI parsing on' : 'Heuristic mode'}
           </span>
           <AuthPanel />
-          {area === 'work' && (
+          {area === 'jobs' && (
             <button type="button" className="icon-btn" onClick={refresh} aria-label="Refresh">
               <RefreshCw size={18} />
             </button>
@@ -100,7 +127,11 @@ export default function App() {
               key={id}
               type="button"
               className={`area-nav__btn ${area === id ? 'area-nav__btn--active' : ''}`}
-              onClick={() => setArea(id)}
+              data-area={id}
+              onClick={() => {
+                setArea(id);
+                setAreaVoiceSummary(null);
+              }}
             >
               <Icon size={16} />
               {label}
@@ -108,19 +139,6 @@ export default function App() {
           );
         })}
       </nav>
-
-      <div className="global-voice">
-        <VoiceDump
-          onSubmit={handleVoiceSubmit}
-          processing={processing}
-          currentArea={area}
-        />
-        {lastSummary && (
-          <div className="toast global-voice__toast" role="status">
-            {lastSummary}
-          </div>
-        )}
-      </div>
 
       <main className="main">
         {area === 'overview' && (
@@ -140,12 +158,8 @@ export default function App() {
           />
         )}
 
-        {area === 'work' && (
-          <WorkArea
-            workTab={workTab}
-            onWorkTabChange={setWorkTab}
-            lifeDesign={lifeDesign}
-            onWorkviewChange={setWorkview}
+        {area === 'jobs' && (
+          <JobTrackerArea
             applications={applications}
             loading={loading}
             error={error}
@@ -154,10 +168,25 @@ export default function App() {
             onUpdateApplication={updateApplication}
             onClearExamples={clearExamples}
             onResetExamples={resetToExamples}
+            onVoiceSubmit={handleJobVoiceSubmit}
+            voiceProcessing={jobVoiceProcessing}
+            voiceSummary={jobVoiceSummary}
           />
         )}
 
-        {['health', 'play', 'love'].includes(area) && <AreaPlaceholder areaId={area} />}
+        {HWPL_TABS.includes(area) && (
+          <HwplAreaTab
+            areaId={area}
+            data={lifeDesign}
+            onGaugeChange={setGauge}
+            onGaugeNoteChange={setGaugeNote}
+            onAddLogEntry={addAreaLogEntry}
+            onDeleteLogEntry={deleteAreaLogEntry}
+            onVoiceSubmit={handleAreaVoiceSubmit}
+            voiceProcessing={areaVoiceProcessing}
+            voiceSummary={areaVoiceSummary}
+          />
+        )}
       </main>
     </div>
   );

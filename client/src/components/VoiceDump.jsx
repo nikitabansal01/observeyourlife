@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { Mic, Square, Loader2, Sparkles, Send } from 'lucide-react';
 
-const AREA_HINTS = {
-  overview: 'life balance, how an area feels, or job search updates',
-  compass: 'thoughts on work and life meaning, or job search updates',
-  work: 'interviews, applications, status changes, and next steps',
-  health: 'energy, sleep, exercise, or job search updates',
-  play: 'what brings you joy, or job search updates',
-  love: 'relationships and connection, or job search updates',
+const AREA_PLACEHOLDERS = {
+  jobs: 'Interviews, applications, status changes — type or tap the mic',
+  health: 'Energy, sleep, exercise — type or tap the mic',
+  play: 'What brought you joy — type or tap the mic',
+  love: 'Relationships and connection — type or tap the mic',
+  work: 'Work philosophy and direction — type or tap the mic',
+  compass: 'Work and life meaning — type or tap the mic',
+  overview: 'How life feels right now — type or tap the mic',
 };
 
 export default function VoiceDump({ onSubmit, processing, currentArea = 'overview' }) {
@@ -16,7 +17,7 @@ export default function VoiceDump({ onSubmit, processing, currentArea = 'overvie
   const [interim, setInterim] = useState('');
   const recognitionRef = useRef(null);
   const supported = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
-  const hint = AREA_HINTS[currentArea] || AREA_HINTS.overview;
+  const areaPlaceholder = AREA_PLACEHOLDERS[currentArea] || AREA_PLACEHOLDERS.overview;
 
   useEffect(() => {
     if (!supported) return;
@@ -75,19 +76,14 @@ export default function VoiceDump({ onSubmit, processing, currentArea = 'overvie
   const placeholder = listening
     ? 'Listening… keep talking'
     : supported
-      ? 'Type or tap the mic — interviews, check-ins, reflections…'
+      ? areaPlaceholder
       : 'Type your update (voice needs Chrome or Safari)';
 
   return (
-    <section className="voice-panel voice-panel--global">
+    <section className="voice-panel">
       <div className="voice-panel__header">
         <Sparkles size={20} />
-        <div>
-          <h2>Voice update</h2>
-          <p>
-            Ramble about {hint}. Job-related updates sync to your pipeline.
-          </p>
-        </div>
+        <h2>Voice update</h2>
       </div>
 
       <div className={`voice-compose ${listening ? 'voice-compose--live' : ''}`}>

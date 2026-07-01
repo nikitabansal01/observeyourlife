@@ -12,7 +12,7 @@ import {
   getLocalLifeDesign,
   saveLocalLifeDesign,
 } from './storage';
-import { DEFAULT_LIFE_DESIGN } from './lifeDesign';
+import { DEFAULT_LIFE_DESIGN, normalizeLifeDesign } from './lifeDesign';
 
 const API = '/api';
 
@@ -268,11 +268,12 @@ export function useApplications() {
 }
 
 export function useLifeDesign() {
-  const [data, setData] = useState(() => getLocalLifeDesign() || DEFAULT_LIFE_DESIGN);
+  const [data, setData] = useState(() => normalizeLifeDesign(getLocalLifeDesign()));
 
   const persist = useCallback((next) => {
-    setData(next);
-    saveLocalLifeDesign(next);
+    const normalized = normalizeLifeDesign(next);
+    setData(normalized);
+    saveLocalLifeDesign(normalized);
   }, []);
 
   const setGauge = useCallback(
@@ -305,12 +306,56 @@ export function useLifeDesign() {
     [data, persist]
   );
 
+  const addAreaLogEntry = useCallback(
+    (areaId, { text, source = 'manual', energy, activity, person, focus } = {}) => {
+      const trimmed = text?.trim();
+      if (!trimmed) return null;
+
+      const newEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        text: trimmed,
+        createdAt: new Date().toISOString(),
+        source,
+      };
+
+      if (energy != null) newEntry.energy = energy;
+      if (activity?.trim()) newEntry.activity = activity.trim();
+      if (person?.trim()) newEntry.person = person.trim();
+      if (focus?.trim()) newEntry.focus = focus.trim();
+
+      persist({
+        ...data,
+        areaLogs: {
+          ...data.areaLogs,
+          [areaId]: [newEntry, ...(data.areaLogs[areaId] || [])],
+        },
+      });
+      return newEntry;
+    },
+    [data, persist]
+  );
+
+  const deleteAreaLogEntry = useCallback(
+    (areaId, entryId) => {
+      persist({
+        ...data,
+        areaLogs: {
+          ...data.areaLogs,
+          [areaId]: (data.areaLogs[areaId] || []).filter((e) => e.id !== entryId),
+        },
+      });
+    },
+    [data, persist]
+  );
+
   return {
     data,
     setGauge,
     setGaugeNote,
     setWorkview,
     setLifeview,
+    addAreaLogEntry,
+    deleteAreaLogEntry,
   };
 }
 

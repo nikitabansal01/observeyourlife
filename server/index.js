@@ -11,12 +11,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { getUserApplications, saveUserApplications, migrateUserApplications, loadExampleData } from './userDb.js';
 import { optionalAuth, requireAuth } from './middleware.js';
 import { parseVoiceDump, applyVoiceDumpResult } from './parser.js';
+import { mergeApplicationLists, stripExamples } from './applicationsMerge.js';
 import { DEFAULT_APPLICATION, STATUSES, INDUSTRIES, BUSINESS_MODELS, FUNDING_STAGES } from './constants.js';
 import { getStorageMode } from './store.js';
-
-function stripExamples(applications) {
-  return Array.isArray(applications) ? applications.filter((app) => !app.isExample) : [];
-}
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -157,22 +154,16 @@ app.post('/api/voice-dump', optionalAuth, async (req, res) => {
       return res.status(400).json({ error: 'Transcript is required' });
     }
 
-    let existing = [];
+    let existing = stripExamples(existingApplications || []);
     let storageWarning = null;
 
     if (req.user) {
       try {
-        existing = await getUserApplications(req.user.id);
+        const dbApps = await getUserApplications(req.user.id);
+        existing = mergeApplicationLists(dbApps, existing);
       } catch (error) {
-        if (Array.isArray(existingApplications)) {
-          existing = stripExamples(existingApplications);
-          storageWarning = error.message;
-        } else {
-          return res.status(503).json({ error: error.message });
-        }
+        storageWarning = error.message;
       }
-    } else if (Array.isArray(existingApplications)) {
-      existing = stripExamples(existingApplications);
     }
 
     const result = await parseVoiceDump(transcript.trim(), existing);
@@ -197,6 +188,8 @@ app.post('/api/voice-dump', optionalAuth, async (req, res) => {
       affected: result.applications.map((a) => a.id),
       persisted,
       storageWarning,
+      parser: result.parser || 'unknown',
+      existingCount: existing.length,
     });
   } catch (error) {
     console.error('Voice dump failed:', error);

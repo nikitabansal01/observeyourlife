@@ -54,10 +54,13 @@ export default function App() {
     setJobVoiceSummary(null);
     try {
       const result = await submitVoiceDump(transcript);
+      const parserNote = result.parser === 'heuristic'
+        ? ' Parsed with basic rules — add OPENAI_API_KEY on the server for smarter understanding.'
+        : '';
       const warning = result.storageWarning
         ? ' Saved in this browser until your database is connected.'
         : '';
-      setJobVoiceSummary(`${result.summary}${warning}`);
+      setJobVoiceSummary(`${result.summary}${warning}${parserNote}`);
     } catch (e) {
       setJobVoiceSummary(`Error: ${e.message}`);
     } finally {

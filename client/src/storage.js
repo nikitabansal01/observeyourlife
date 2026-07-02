@@ -63,5 +63,33 @@ export function isShowingExamples(applications) {
 }
 
 export function stripExamples(applications) {
-  return applications.filter((a) => !a.isExample);
+  return Array.isArray(applications) ? applications.filter((a) => !a.isExample) : [];
+}
+
+export function mergeApplications(existing, incoming) {
+  const map = new Map();
+
+  for (const app of stripExamples(existing)) {
+    if (app?.id) map.set(app.id, app);
+  }
+
+  for (const app of stripExamples(incoming)) {
+    if (!app?.id) continue;
+    const byCompany = [...map.values()].find(
+      (candidate) =>
+        candidate.company &&
+        app.company &&
+        candidate.company.toLowerCase().replace(/[^a-z0-9]/g, '') ===
+          app.company.toLowerCase().replace(/[^a-z0-9]/g, '')
+    );
+    if (byCompany) {
+      map.set(byCompany.id, { ...byCompany, ...app, id: byCompany.id, isExample: false });
+    } else {
+      map.set(app.id, { ...app, isExample: false });
+    }
+  }
+
+  return [...map.values()].sort(
+    (a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)
+  );
 }

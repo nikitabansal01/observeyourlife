@@ -10,6 +10,7 @@ import {
   getLocalLifeDesign,
   saveLocalLifeDesign,
   stripExamples,
+  mergeApplications,
 } from './storage';
 import { DEFAULT_LIFE_DESIGN, normalizeLifeDesign } from './lifeDesign';
 
@@ -181,19 +182,21 @@ export function useApplications() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Failed to process voice dump');
 
-    const parsedApps = stripExamples(data.applications || []);
-    if (parsedApps.length === 0) {
+    const serverApps = stripExamples(data.applications || []);
+    const mergedApps = mergeApplications(existing, serverApps);
+
+    if (mergedApps.length === 0) {
       throw new Error('No companies were extracted from your voice dump. Try naming each company clearly.');
     }
 
     if (isAuthenticated && data.persisted) {
-      setApplications(parsedApps);
+      setApplications(mergedApps);
       setDataSource('account');
     } else {
-      persistLocal(parsedApps);
+      persistLocal(mergedApps);
     }
 
-    return { ...data, applications: parsedApps };
+    return { ...data, applications: mergedApps };
   };
 
   const updateApplication = async (id, updates) => {

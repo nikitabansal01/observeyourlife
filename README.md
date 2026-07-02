@@ -61,10 +61,10 @@ Sign-in uses [Clerk](https://clerk.com). Connect Clerk to your Vercel project (I
 |-----|-------|--------------|
 | `CLERK_SECRET_KEY` | Server API | Production, Preview, Development |
 | `CLERK_PUBLISHABLE_KEY` | Server API (or set `NEXT_PUBLIC_*` — API copies it) | Production, Preview, Development |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Client (Vite reads this name) | Production, Preview, Development |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Client sign-in UI | Production, Preview, Development |
 | `OPENAI_API_KEY` | Server API (optional) | Production, Preview |
 
-Local dev: set `CLERK_SECRET_KEY` in `.env` and `VITE_CLERK_PUBLISHABLE_KEY` in `client/.env.local`.
+Local dev: set `CLERK_SECRET_KEY` in `.env` and `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` in `client/.env.local`.
 
 Reference: [`.env.vercel.example`](.env.vercel.example)
 
@@ -85,27 +85,28 @@ Reference: [`.env.vercel.example`](.env.vercel.example)
 | Voice dump (not signed in) | Yes — data stays in browser `localStorage` |
 | Voice dump parsing | Yes — needs `OPENAI_API_KEY` for AI mode |
 | Example companies | Yes — served from bundled JSON |
-| Sign-in / cloud save | Yes — **Clerk** for auth; **KV** (optional) for saved applications on Vercel |
+| Sign-in / cloud save | Yes — **Clerk** for auth; **Neon Postgres** for saved applications on Vercel |
 
 ### Cloud save on Vercel
 
 Clerk handles sign-in. Saved job applications still need writable storage on Vercel:
 
-1. **Storage** → **Create Database** → **KV** (or Upstash Redis)
-2. Connect to this project (`KV_REST_API_URL`, `KV_REST_API_TOKEN` are set automatically)
+1. **Storage** → **Create Database** → **Neon (Postgres)**
+2. Connect to this project (`DATABASE_URL` / `POSTGRES_URL` are set automatically)
 3. Redeploy
 
-Without KV, sign-in works but saving applications to your account fails on Vercel. Local `npm run dev` uses the `data/` folder on disk.
+Without Postgres, sign-in works but saving applications to your account fails on Vercel. Local `npm run dev` uses the `data/` folder on disk.
 
 ### Voice dump returns "Failed to process voice dump"
 
 | Cause | What to do |
 |-------|------------|
-| API returns 500 on all `/api/*` routes | Ensure `CLERK_PUBLISHABLE_KEY` is set on the server, or `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (the API copies it automatically after redeploy). |
-| Signed in, no KV database | Voice dump still works — data saves to your browser. Add **Storage → KV** to sync to your account. |
+| API returns 500 on all `/api/*` routes | Ensure Clerk keys are set (`CLERK_SECRET_KEY` + publishable key). |
+| Signed in, no Postgres database | Voice dump still works — data saves to your browser. Connect **Neon** under Storage. |
 | Missing `OPENAI_API_KEY` | Not required — heuristic parsing is used as fallback. |
+| Summary shows but pipeline is empty | Redeploy latest code; older builds could accept an AI summary without saving companies. |
 
-Check `https://<your-app>.vercel.app/api/health` — it should return `{"ok":true,...}`, not a 500 error.
+Check `https://<your-app>.vercel.app/api/health` — `storage` should be `"postgres"`, not `"unconfigured"`.
 
 ## Data & privacy
 
@@ -113,7 +114,7 @@ Check `https://<your-app>.vercel.app/api/health` — it should return `{"ok":tru
 |------|----------------------|
 | **Not signed in** | Browser `localStorage` on your machine only |
 | **Signed in (local)** | Server `data/accounts/<your-id>/` (gitignored, never in the repo) |
-| **Signed in (Vercel)** | Vercel KV database linked to your project |
+| **Signed in (Vercel)** | Neon Postgres database linked to your project |
 | **First visit** | Fictional **example** companies from `server/example-data.json` |
 
 Your real job applications are **never committed to GitHub**. The repo only ships dummy example data.

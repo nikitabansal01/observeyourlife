@@ -14,6 +14,10 @@ import { parseVoiceDump, applyVoiceDumpResult } from './parser.js';
 import { DEFAULT_APPLICATION, STATUSES, INDUSTRIES, BUSINESS_MODELS, FUNDING_STAGES } from './constants.js';
 import { getStorageMode } from './store.js';
 
+function stripExamples(applications) {
+  return Array.isArray(applications) ? applications.filter((app) => !app.isExample) : [];
+}
+
 const app = express();
 const PORT = process.env.PORT || 5001;
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -161,14 +165,14 @@ app.post('/api/voice-dump', optionalAuth, async (req, res) => {
         existing = await getUserApplications(req.user.id);
       } catch (error) {
         if (Array.isArray(existingApplications)) {
-          existing = existingApplications;
+          existing = stripExamples(existingApplications);
           storageWarning = error.message;
         } else {
           return res.status(503).json({ error: error.message });
         }
       }
     } else if (Array.isArray(existingApplications)) {
-      existing = existingApplications;
+      existing = stripExamples(existingApplications);
     }
 
     const result = await parseVoiceDump(transcript.trim(), existing);

@@ -1,6 +1,18 @@
 import { Info, Trash2, RotateCcw, Cloud } from 'lucide-react';
 
 export default function DataSourceBanner({ dataSource, isAuthenticated, onClearExamples, onResetExamples }) {
+  if (isAuthenticated && dataSource === 'local') {
+    return (
+      <div className="data-banner data-banner--local" role="status">
+        <Cloud size={18} />
+        <div>
+          <strong>Signed in — saved in this browser</strong>
+          <p>Your account is connected, but cloud database sync is unavailable. Data stays in this browser until Postgres is linked.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (isAuthenticated) {
     return (
       <div className="data-banner data-banner--account" role="status">

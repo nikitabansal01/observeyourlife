@@ -9,7 +9,7 @@ const publishableKey = getClerkPublishableKey();
 
 if (!publishableKey) {
   console.warn(
-    'Missing Clerk publishable key. Set VITE_CLERK_PUBLISHABLE_KEY (or NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY from Vercel).',
+    'Missing Clerk publishable key. Set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY in client/.env.local (or via Vercel env vars).',
   );
 }
 

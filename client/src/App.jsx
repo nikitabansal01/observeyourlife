@@ -55,7 +55,7 @@ export default function App() {
     try {
       const result = await submitVoiceDump(transcript);
       const warning = result.storageWarning
-        ? ` (saved in browser only — ${result.storageWarning})`
+        ? ' Saved in this browser until your database is connected.'
         : '';
       setJobVoiceSummary(`${result.summary}${warning}`);
     } catch (e) {

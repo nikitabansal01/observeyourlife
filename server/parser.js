@@ -29,6 +29,9 @@ Given a voice transcript and the current list of applications (JSON), extract up
 
 Rules:
 - CRITICAL: If the user mentions multiple companies in one dump, return a SEPARATE object in "applications" for EACH distinct company. Never merge different companies into one record.
+- CRITICAL: "applications" must NEVER be empty when the user mentioned one or more companies. Always populate it.
+- Decode spelled-out names (e.g. "r a y d a r dot XYZ" -> "Raydar.xyz", "q v e n t u s" -> "Qventus").
+- Handle domains like radar.xyz, company.ai, etc.
 - Each company's "notes" should only contain details about that company, not the full transcript.
 - Match existing applications by company name (fuzzy match OK).
 - Merge new info into existing records; don't wipe fields unless the user corrects them.
@@ -82,6 +85,86 @@ function decodeSpelledName(text) {
   return spelled[1].replace(/\s+/g, '');
 }
 
+function extractSpelledCompany(segment) {
+  const spelled = segment.match(
+    /spelled\s+as\s+((?:[a-z]\s+){2,}[a-z])(?:\s+dot\s+([a-z0-9.]+))?/i
+  );
+  if (!spelled) return null;
+
+  let name = spelled[1].replace(/\s+/g, '');
+  if (spelled[2]) {
+    const tld = spelled[2].replace(/^\./, '').toLowerCase();
+    name = `${name}.${tld}`;
+  }
+  return normalizeCompanyName(name);
+}
+
+const KNOWN_COMPANY_PATTERNS = [
+  { regex: /r\s*a\s*y\s*d\s*a\s*r(?:\s+dot\s+xyz)?|radar\.xyz/gi, name: 'Raydar.xyz' },
+  { regex: /deep\s*scribe(?:\s+(?:but\s+)?ai)?/gi, name: 'DeepScribe AI' },
+  { regex: /\bnourish\b/gi, name: 'Nourish' },
+  { regex: /q\s*v\s*e\s*n\s*t\s*u\s*s|\bqventus\b/gi, name: 'Qventus' },
+  { regex: /\babby\s*care\b/gi, name: 'Abby Care' },
+  { regex: /\btypeface\.ai\b/gi, name: 'Typeface.ai' },
+  { regex: /\bret(?:ail|ell)(?:\.ai)?\b/gi, name: 'Retell AI' },
+  { regex: /\bophelia\b/gi, name: 'Ophelia' },
+];
+
+function extractCompanyChunks(transcript) {
+  const hits = [];
+
+  for (const { regex, name } of KNOWN_COMPANY_PATTERNS) {
+    regex.lastIndex = 0;
+    let match;
+    while ((match = regex.exec(transcript)) !== null) {
+      hits.push({ index: match.index, name });
+    }
+  }
+
+  const spelledPattern = /spelled\s+as\s+(?:[a-z]\s+){2,}[a-z](?:\s+dot\s+[a-z0-9.]+)?/gi;
+  let spelledMatch;
+  while ((spelledMatch = spelledPattern.exec(transcript)) !== null) {
+    const slice = transcript.slice(spelledMatch.index, spelledMatch.index + 120);
+    const name = extractSpelledCompany(slice);
+    if (name) hits.push({ index: spelledMatch.index, name });
+  }
+
+  const domainPattern = /\b([a-z0-9][a-z0-9-]*\.(?:xyz|ai|com|io))\b/gi;
+  let domainMatch;
+  while ((domainMatch = domainPattern.exec(transcript)) !== null) {
+    hits.push({ index: domainMatch.index, name: normalizeCompanyName(domainMatch[1]) });
+  }
+
+  if (hits.length === 0) return [];
+
+  const uniqueHits = hits
+    .sort((a, b) => a.index - b.index)
+    .filter((hit, i, arr) => {
+      if (i === 0) return true;
+      const prev = arr[i - 1];
+      const sameSpot = hit.index - prev.index < 35;
+      const sameCompany =
+        normalizeCompany(hit.name) === normalizeCompany(prev.name)
+        || normalizeCompany(hit.name).startsWith(normalizeCompany(prev.name))
+        || normalizeCompany(prev.name).startsWith(normalizeCompany(hit.name));
+      return !(sameSpot || sameCompany);
+    });
+
+  return uniqueHits.map((hit, i) => {
+    const start = Math.max(0, hit.index - 40);
+    const end = uniqueHits[i + 1]?.index ?? transcript.length;
+    return {
+      company: hit.name,
+      segment: transcript.slice(start, end).trim(),
+    };
+  });
+}
+
+function sanitizeAiApplications(applications) {
+  if (!Array.isArray(applications)) return [];
+  return applications.filter((app) => app?.company?.trim());
+}
+
 function normalizeCompanyName(raw) {
   const name = raw.trim();
   if (!name) return 'Unknown Company';
@@ -131,9 +214,11 @@ function splitTranscriptIntoSegments(transcript) {
 
   const markers = [
     /(?:^|\s)(?:one|first)\s+(?:company\s+)?(?:is\s+|was\s+)?/gi,
+    /(?:^|\s)second\s+compan(?:y|ies)\s+(?:that\s+)?(?:i\s+)?(?:interviewed|spoke)\s+(?:with\s+)?(?:was|were|is)?\s*/gi,
+    /(?:^|\s)(?:the\s+)?(?:second|third|fourth|another|next)\s+compan(?:y|ies)\s+(?:that\s+)?(?:i\s+)?(?:interviewed|spoke)\s+(?:with\s+)?(?:was|were)?\s*/gi,
+    /(?:^|\s)my\s+third\s+interview\b/gi,
     /(?:^|\s)then\s+/gi,
     /(?:^|\s)(?:the\s+)?other\s+compan(?:y|ies)\s+(?:that\s+)?(?:i\s+)?(?:interviewed|spoke)\s+(?:with\s+)?(?:was|were)\s+/gi,
-    /(?:^|\s)(?:the\s+)?(?:second|third|fourth|another|next)\s+compan(?:y|ies)\s+(?:that\s+)?(?:i\s+)?(?:interviewed|spoke)\s+(?:with\s+)?(?:was|were)?\s*/gi,
     /(?:^|\s)also\s+(?:yesterday|today|recently)\s+/gi,
   ];
 
@@ -152,6 +237,13 @@ function splitTranscriptIntoSegments(transcript) {
 }
 
 function extractCompanyFromSegment(segment) {
+  const spelledCompany = extractSpelledCompany(segment);
+  if (spelledCompany) return spelledCompany;
+
+  for (const { regex, name } of KNOWN_COMPANY_PATTERNS) {
+    if (regex.test(segment)) return name;
+  }
+
   if (/typeface\.ai/i.test(segment)) return 'Typeface.ai';
   if (/r\s*e\s*t\s*e\s*l\s*l|retell/i.test(segment)) return 'Retell AI';
   if (/retail\.ai/i.test(segment)) return 'Retell AI';
@@ -196,17 +288,20 @@ function extractPositionTitle(segment) {
     .trim();
 }
 
-function parseSingleSegment(segment, existingApps) {
+function parseSingleSegment(segment, existingApps, companyHint = null) {
   const lower = segment.toLowerCase();
-  const company = extractCompanyFromSegment(segment);
+  const company = companyHint || extractCompanyFromSegment(segment);
 
   let status = 'applied';
   if (/offer/i.test(lower)) status = 'offer';
   else if (/reject/i.test(lower)) status = 'rejected';
   else if (/onsite|on-site/i.test(lower)) status = 'onsite';
+  else if (/moving forward|next round|round three/i.test(lower)) status = 'interview_scheduled';
+  else if (/hiring manager.*round|round (?:two|2|three|3)/i.test(lower)) status = 'interview_completed';
   else if (/interview.*(done|completed|went well|finished)/i.test(lower)) status = 'interview_completed';
   else if (/interview.*(scheduled|tomorrow|next week|on monday|on tuesday)/i.test(lower)) status = 'interview_scheduled';
-  else if (/recruiter|interviewed/i.test(lower)) status = 'recruiter_screen';
+  else if (/recruiter|recruiter call/i.test(lower)) status = 'recruiter_screen';
+  else if (/interviewed|hiring manager/i.test(lower)) status = 'recruiter_screen';
   else if (/phone screen/i.test(lower)) status = 'phone_screen';
 
   const positionMatch = extractPositionTitle(segment);
@@ -266,7 +361,7 @@ function parseSingleSegment(segment, existingApps) {
     status,
     interviewDates,
     nextSteps,
-    needsFollowUp: /follow up|waiting to hear|haven't heard/i.test(lower),
+    needsFollowUp: /follow up|waiting to hear|haven't heard|hear back|get to hear back/i.test(lower),
     needsPrep: /prep|prepare|upcoming interview/i.test(lower),
     notes: segment.trim(),
   };
@@ -276,12 +371,22 @@ function parseSingleSegment(segment, existingApps) {
 }
 
 function heuristicParse(transcript, existingApps) {
-  const segments = splitTranscriptIntoSegments(transcript);
-  const mergedApps = segments.map((segment) => parseSingleSegment(segment, existingApps));
+  const companyChunks = extractCompanyChunks(transcript);
+  let mergedApps;
+
+  if (companyChunks.length > 0) {
+    mergedApps = companyChunks.map(({ company, segment }) =>
+      parseSingleSegment(segment, existingApps, company)
+    );
+  } else {
+    const segments = splitTranscriptIntoSegments(transcript);
+    mergedApps = segments.map((segment) => parseSingleSegment(segment, existingApps));
+  }
 
   const uniqueByCompany = new Map();
   for (const app of mergedApps) {
-    const key = normalizeCompanyName(app.company).toLowerCase().replace(/[^a-z0-9]/g, '');
+    const key = normalizeCompany(app.company);
+    if (!key || key === 'unknowncompany') continue;
     if (!uniqueByCompany.has(key) || app.notes.length > uniqueByCompany.get(key).notes.length) {
       uniqueByCompany.set(key, app);
     }
@@ -327,7 +432,14 @@ export async function parseVoiceDump(transcript, existingApps) {
     });
 
     const parsed = JSON.parse(response.choices[0].message.content);
-    const mergedApps = parsed.applications.map((incoming) => {
+    const aiApps = sanitizeAiApplications(parsed.applications);
+
+    if (aiApps.length === 0) {
+      console.warn('OpenAI returned no applications, using heuristic');
+      return heuristicParse(transcript, existingApps);
+    }
+
+    const mergedApps = aiApps.map((incoming) => {
       const existing =
         existingApps.find((a) => a.id === incoming.id) ||
         findExisting(existingApps, incoming.company);
@@ -336,7 +448,7 @@ export async function parseVoiceDump(transcript, existingApps) {
 
     return {
       applications: mergedApps,
-      summary: parsed.summary || 'Updated from voice dump',
+      summary: parsed.summary || `Added/updated ${mergedApps.length} companies`,
     };
   } catch (error) {
     console.error('OpenAI parse failed, using heuristic:', error.message);

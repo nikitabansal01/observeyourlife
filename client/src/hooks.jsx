@@ -56,6 +56,17 @@ export function useApplications() {
     return data.applications;
   }, []);
 
+  const loadLocalRealApps = () => {
+    const local = getLocalApplications();
+    const real = local ? stripExamples(local) : [];
+    if (real.length === 0) return null;
+    setApplications(real);
+    setDataSource('local');
+    return real;
+  };
+
+  const isStorageError = (message = '') => /postgres|database|storage|cloud accounts/i.test(message);
+
   const refresh = useCallback(async () => {
     if (authLoading) return;
 
@@ -80,6 +91,13 @@ export function useApplications() {
           });
           if (!syncRes.ok) {
             const data = await syncRes.json().catch(() => ({}));
+            if (isStorageError(data.error)) {
+              const fallback = loadLocalRealApps();
+              if (fallback) {
+                setError('Database unavailable — showing browser-saved data.');
+                return fallback;
+              }
+            }
             throw new Error(data.error || 'Failed to sync local data to your account');
           }
           clearLocalData();
@@ -89,7 +107,17 @@ export function useApplications() {
         const res = await fetch(`${API}/applications`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) throw new Error('Failed to load your saved applications');
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (isStorageError(data.error)) {
+            const fallback = loadLocalRealApps();
+            if (fallback) {
+              setError('Database unavailable — showing browser-saved data.');
+              return fallback;
+            }
+          }
+          throw new Error(data.error || 'Failed to load your saved applications');
+        }
         const data = await res.json();
         setApplications(data);
         setDataSource('account');
@@ -143,9 +171,7 @@ export function useApplications() {
   };
 
   const submitVoiceDump = async (transcript) => {
-    const existing = isAuthenticated
-      ? applications
-      : applications.filter((a) => !a.isExample);
+    const existing = stripExamples(applications);
 
     const res = await fetch(`${API}/voice-dump`, {
       method: 'POST',
@@ -155,14 +181,19 @@ export function useApplications() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Failed to process voice dump');
 
-    if (isAuthenticated && data.persisted) {
-      setApplications(data.applications);
-      setDataSource('account');
-    } else {
-      persistLocal(data.applications);
+    const parsedApps = stripExamples(data.applications || []);
+    if (parsedApps.length === 0) {
+      throw new Error('No companies were extracted from your voice dump. Try naming each company clearly.');
     }
 
-    return data;
+    if (isAuthenticated && data.persisted) {
+      setApplications(parsedApps);
+      setDataSource('account');
+    } else {
+      persistLocal(parsedApps);
+    }
+
+    return { ...data, applications: parsedApps };
   };
 
   const updateApplication = async (id, updates) => {

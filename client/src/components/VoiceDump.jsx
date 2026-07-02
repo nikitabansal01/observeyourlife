@@ -11,6 +11,12 @@ const AREA_PLACEHOLDERS = {
   overview: 'How life feels right now — type or tap the mic',
 };
 
+function combineText(transcript, interim) {
+  if (!interim) return transcript;
+  if (!transcript) return interim;
+  return `${transcript} ${interim}`;
+}
+
 export default function VoiceDump({ onSubmit, processing, currentArea = 'overview' }) {
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -38,7 +44,9 @@ export default function VoiceDump({ onSubmit, processing, currentArea = 'overvie
         else interimText += text;
       }
 
-      if (finalText) setTranscript((prev) => `${prev} ${finalText}`.trim());
+      if (finalText) {
+        setTranscript((prev) => combineText(prev, finalText));
+      }
       setInterim(interimText);
     };
 
@@ -63,7 +71,7 @@ export default function VoiceDump({ onSubmit, processing, currentArea = 'overvie
   };
 
   const handleSubmit = async () => {
-    const text = `${transcript} ${interim}`.trim();
+    const text = combineText(transcript, interim).trim();
     if (!text || processing) return;
     if (listening) recognitionRef.current?.stop();
     setListening(false);
@@ -72,7 +80,7 @@ export default function VoiceDump({ onSubmit, processing, currentArea = 'overvie
     setTranscript('');
   };
 
-  const displayText = `${transcript} ${interim}`.trim();
+  const displayText = combineText(transcript, interim);
   const placeholder = listening
     ? 'Listening… keep talking'
     : supported

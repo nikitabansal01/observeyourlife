@@ -13,6 +13,8 @@ export default function JobTrackerArea({
   onUpdateApplication,
   onClearExamples,
   onResetExamples,
+  onSyncToAccount,
+  syncing,
   nested = false,
 }) {
   const [jobTab, setJobTab] = useState('pipeline');
@@ -54,6 +56,8 @@ export default function JobTrackerArea({
             isAuthenticated={isAuthenticated}
             onClearExamples={onClearExamples}
             onResetExamples={onResetExamples}
+            onSyncToAccount={onSyncToAccount}
+            syncing={syncing}
           />
         </div>
 

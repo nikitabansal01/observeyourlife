@@ -173,12 +173,12 @@ app.post('/api/voice-dump', optionalAuth, async (req, res) => {
     }));
 
     let persisted = false;
-    if (req.user && !storageWarning) {
+    if (req.user) {
       try {
         await saveUserApplications(req.user.id, updated);
         persisted = true;
       } catch (error) {
-        storageWarning = error.message;
+        storageWarning = storageWarning || error.message;
       }
     }
 
@@ -187,6 +187,7 @@ app.post('/api/voice-dump', optionalAuth, async (req, res) => {
       applications: updated,
       affected: result.applications.map((a) => a.id),
       persisted,
+      authDetected: Boolean(req.user),
       storageWarning,
       parser: result.parser || 'unknown',
       existingCount: existing.length,

@@ -68,6 +68,33 @@ export function useApplications() {
 
   const isStorageError = (message = '') => /postgres|database|storage|cloud accounts/i.test(message);
 
+  const syncToAccount = useCallback(async (apps) => {
+    if (!isAuthenticated || !getToken) return null;
+
+    const token = await getToken();
+    if (!token) throw new Error('Sign-in session expired. Sign out and sign in again.');
+
+    const res = await fetch(`${API}/auth/sync`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ localApplications: stripExamples(apps) }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to sync to your account');
+    }
+
+    clearLocalData();
+    setLocalMeta({ dataSource: 'account' });
+    setApplications(data.applications);
+    setDataSource('account');
+    return data.applications;
+  }, [isAuthenticated, getToken]);
+
   const refresh = useCallback(async () => {
     if (authLoading) return;
 
@@ -120,6 +147,14 @@ export function useApplications() {
           throw new Error(data.error || 'Failed to load your saved applications');
         }
         const data = await res.json();
+        const local = getLocalApplications();
+        const localReal = local ? stripExamples(local) : [];
+
+        if (localReal.length > data.length) {
+          const synced = await syncToAccount(localReal);
+          if (synced) return synced;
+        }
+
         setApplications(data);
         setDataSource('account');
         return data;
@@ -158,7 +193,7 @@ export function useApplications() {
     } finally {
       setLoading(false);
     }
-  }, [authLoading, isAuthenticated, getToken, loadExamples]);
+  }, [authLoading, isAuthenticated, getToken, loadExamples, syncToAccount]);
 
   useEffect(() => {
     refresh();
@@ -173,6 +208,13 @@ export function useApplications() {
 
   const submitVoiceDump = async (transcript) => {
     const existing = stripExamples(applications);
+
+    if (isAuthenticated && getToken) {
+      const token = await getToken();
+      if (!token) {
+        throw new Error('Sign-in session expired. Sign out and sign in again, then retry.');
+      }
+    }
 
     const res = await fetch(`${API}/voice-dump`, {
       method: 'POST',
@@ -189,9 +231,25 @@ export function useApplications() {
       throw new Error('No companies were extracted from your voice dump. Try naming each company clearly.');
     }
 
-    if (isAuthenticated && data.persisted) {
-      setApplications(mergedApps);
-      setDataSource('account');
+    if (isAuthenticated) {
+      if (data.persisted) {
+        setApplications(mergedApps);
+        setDataSource('account');
+      } else if (!data.authDetected) {
+        persistLocal(mergedApps);
+        throw new Error('Server did not detect your sign-in. Data saved in this browser only.');
+      } else {
+        try {
+          await syncToAccount(mergedApps);
+        } catch (error) {
+          persistLocal(mergedApps);
+          throw new Error(
+            data.storageWarning
+              ? `${data.storageWarning} Data saved in this browser only.`
+              : error.message
+          );
+        }
+      }
     } else {
       persistLocal(mergedApps);
     }
@@ -243,6 +301,7 @@ export function useApplications() {
     updateApplication,
     clearExamples,
     resetToExamples,
+    syncToAccount,
   };
 }
 

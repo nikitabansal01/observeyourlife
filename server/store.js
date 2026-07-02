@@ -18,6 +18,8 @@ export function getDatabaseUrl() {
   return (
     process.env.DATABASE_URL
     || process.env.POSTGRES_URL
+    || process.env.DATABASE_URL_UNPOOLED
+    || process.env.POSTGRES_URL_NON_POOLING
     || process.env.POSTGRES_PRISMA_URL
     || process.env.NEON_DATABASE_URL
     || ''
@@ -63,6 +65,19 @@ async function ensureSchema() {
   schemaReady = true;
 }
 
+function parseApplications(raw) {
+  if (!raw) return [];
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(raw) ? raw : [];
+}
+
 export async function readUserApplications(userId) {
   assertStorageReady();
 
@@ -75,7 +90,7 @@ export async function readUserApplications(userId) {
       WHERE user_id = ${userId}
       LIMIT 1
     `;
-    return rows[0]?.applications || [];
+    return parseApplications(rows[0]?.applications);
   }
 
   const userDir = join(USERS_DATA_DIR, userId);
@@ -96,14 +111,24 @@ export async function writeUserApplications(userId, applications) {
   if (usePostgresStorage()) {
     await ensureSchema();
     const sql = getSql();
-    await sql`
-      INSERT INTO user_applications (user_id, applications, updated_at)
-      VALUES (${userId}, ${applications}::jsonb, NOW())
-      ON CONFLICT (user_id)
-      DO UPDATE SET
-        applications = EXCLUDED.applications,
-        updated_at = NOW()
-    `;
+    const payload = JSON.stringify(applications);
+
+    try {
+      await sql`
+        INSERT INTO user_applications (user_id, applications, updated_at)
+        VALUES (${userId}, ${payload}::jsonb, NOW())
+        ON CONFLICT (user_id)
+        DO UPDATE SET
+          applications = EXCLUDED.applications,
+          updated_at = NOW()
+      `;
+    } catch (error) {
+      console.error('Neon write failed:', error.message, {
+        userId,
+        companyCount: applications.length,
+      });
+      throw new Error(`Failed to save to database: ${error.message}`);
+    }
     return;
   }
 

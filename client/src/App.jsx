@@ -31,6 +31,7 @@ export default function App() {
     updateApplication,
     clearExamples,
     resetToExamples,
+    syncToAccount,
   } = useApplications();
   const {
     data: lifeDesign,
@@ -44,6 +45,7 @@ export default function App() {
   const { aiEnabled } = useHealth();
   const [jobVoiceProcessing, setJobVoiceProcessing] = useState(false);
   const [jobVoiceSummary, setJobVoiceSummary] = useState(null);
+  const [syncing, setSyncing] = useState(false);
   const [areaVoiceProcessing, setAreaVoiceProcessing] = useState(false);
   const [areaVoiceSummary, setAreaVoiceSummary] = useState(null);
   const [area, setArea] = useState('overview');
@@ -99,6 +101,18 @@ export default function App() {
     ...LIFE_AREAS.map((a) => ({ id: a.id, label: a.label })),
   ];
 
+  const handleSyncToAccount = async () => {
+    setSyncing(true);
+    try {
+      const synced = await syncToAccount(applications);
+      if (!synced) {
+        setJobVoiceSummary('Error: Could not sync to your account. Try again in a moment.');
+      }
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const jobTrackerProps = {
     applications,
     loading,
@@ -108,6 +122,8 @@ export default function App() {
     onUpdateApplication: updateApplication,
     onClearExamples: clearExamples,
     onResetExamples: resetToExamples,
+    onSyncToAccount: handleSyncToAccount,
+    syncing,
     onVoiceSubmit: handleJobVoiceSubmit,
     voiceProcessing: jobVoiceProcessing,
     voiceSummary: jobVoiceSummary,

@@ -152,10 +152,10 @@ export function useApplications() {
       headers: await authHeaders(getToken),
       body: JSON.stringify({ transcript, existingApplications: existing }),
     });
-    if (!res.ok) throw new Error('Failed to process voice dump');
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to process voice dump');
 
-    if (isAuthenticated) {
+    if (isAuthenticated && data.persisted) {
       setApplications(data.applications);
       setDataSource('account');
     } else {

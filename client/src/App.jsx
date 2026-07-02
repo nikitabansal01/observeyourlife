@@ -54,7 +54,10 @@ export default function App() {
     setJobVoiceSummary(null);
     try {
       const result = await submitVoiceDump(transcript);
-      setJobVoiceSummary(result.summary);
+      const warning = result.storageWarning
+        ? ` (saved in browser only — ${result.storageWarning})`
+        : '';
+      setJobVoiceSummary(`${result.summary}${warning}`);
     } catch (e) {
       setJobVoiceSummary(`Error: ${e.message}`);
     } finally {

@@ -60,6 +60,7 @@ Sign-in uses [Clerk](https://clerk.com). Connect Clerk to your Vercel project (I
 | Key | Where | Environments |
 |-----|-------|--------------|
 | `CLERK_SECRET_KEY` | Server API | Production, Preview, Development |
+| `CLERK_PUBLISHABLE_KEY` | Server API (or set `NEXT_PUBLIC_*` — API copies it) | Production, Preview, Development |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Client (Vite reads this name) | Production, Preview, Development |
 | `OPENAI_API_KEY` | Server API (optional) | Production, Preview |
 
@@ -95,6 +96,16 @@ Clerk handles sign-in. Saved job applications still need writable storage on Ver
 3. Redeploy
 
 Without KV, sign-in works but saving applications to your account fails on Vercel. Local `npm run dev` uses the `data/` folder on disk.
+
+### Voice dump returns "Failed to process voice dump"
+
+| Cause | What to do |
+|-------|------------|
+| API returns 500 on all `/api/*` routes | Ensure `CLERK_PUBLISHABLE_KEY` is set on the server, or `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (the API copies it automatically after redeploy). |
+| Signed in, no KV database | Voice dump still works — data saves to your browser. Add **Storage → KV** to sync to your account. |
+| Missing `OPENAI_API_KEY` | Not required — heuristic parsing is used as fallback. |
+
+Check `https://<your-app>.vercel.app/api/health` — it should return `{"ok":true,...}`, not a 500 error.
 
 ## Data & privacy
 

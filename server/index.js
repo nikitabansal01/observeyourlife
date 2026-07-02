@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { clerkMiddleware } from '@clerk/express';
+import { isClerkEnabled } from './clerk.js';
 import { readFile, rename } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
@@ -20,7 +21,9 @@ const LEGACY_DB = join(__dirname, '..', 'db.json');
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
-app.use(clerkMiddleware());
+if (isClerkEnabled()) {
+  app.use(clerkMiddleware());
+}
 
 app.get('/', (_req, res) => {
   res.json({
@@ -44,7 +47,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     aiEnabled: Boolean(process.env.OPENAI_API_KEY),
-    authEnabled: Boolean(process.env.CLERK_SECRET_KEY),
+    authEnabled: isClerkEnabled(),
     storage,
   });
 });
@@ -144,33 +147,57 @@ app.delete('/api/applications/:id', requireAuth, async (req, res) => {
 });
 
 app.post('/api/voice-dump', optionalAuth, async (req, res) => {
-  const { transcript, existingApplications } = req.body;
-  if (!transcript?.trim()) {
-    return res.status(400).json({ error: 'Transcript is required' });
+  try {
+    const { transcript, existingApplications } = req.body;
+    if (!transcript?.trim()) {
+      return res.status(400).json({ error: 'Transcript is required' });
+    }
+
+    let existing = [];
+    let storageWarning = null;
+
+    if (req.user) {
+      try {
+        existing = await getUserApplications(req.user.id);
+      } catch (error) {
+        if (Array.isArray(existingApplications)) {
+          existing = existingApplications;
+          storageWarning = error.message;
+        } else {
+          return res.status(503).json({ error: error.message });
+        }
+      }
+    } else if (Array.isArray(existingApplications)) {
+      existing = existingApplications;
+    }
+
+    const result = await parseVoiceDump(transcript.trim(), existing);
+    const updated = applyVoiceDumpResult(existing, result).map((app) => ({
+      ...app,
+      isExample: false,
+    }));
+
+    let persisted = false;
+    if (req.user && !storageWarning) {
+      try {
+        await saveUserApplications(req.user.id, updated);
+        persisted = true;
+      } catch (error) {
+        storageWarning = error.message;
+      }
+    }
+
+    res.json({
+      summary: result.summary,
+      applications: updated,
+      affected: result.applications.map((a) => a.id),
+      persisted,
+      storageWarning,
+    });
+  } catch (error) {
+    console.error('Voice dump failed:', error);
+    res.status(500).json({ error: error.message || 'Failed to process voice dump' });
   }
-
-  const existing = req.user
-    ? await getUserApplications(req.user.id)
-    : Array.isArray(existingApplications)
-      ? existingApplications
-      : [];
-
-  const result = await parseVoiceDump(transcript.trim(), existing);
-  const updated = applyVoiceDumpResult(existing, result).map((app) => ({
-    ...app,
-    isExample: false,
-  }));
-
-  if (req.user) {
-    await saveUserApplications(req.user.id, updated);
-  }
-
-  res.json({
-    summary: result.summary,
-    applications: updated,
-    affected: result.applications.map((a) => a.id),
-    persisted: Boolean(req.user),
-  });
 });
 
 app.get('/api/meta', (_req, res) => {
@@ -180,6 +207,11 @@ app.get('/api/meta', (_req, res) => {
     businessModels: BUSINESS_MODELS,
     fundingStages: FUNDING_STAGES,
   });
+});
+
+app.use((err, _req, res, _next) => {
+  console.error('Unhandled API error:', err);
+  res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
 export default app;

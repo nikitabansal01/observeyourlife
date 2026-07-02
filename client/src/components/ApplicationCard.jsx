@@ -2,10 +2,11 @@ import { Calendar, Building2, Briefcase, DollarSign, ArrowRight, Bell, BookOpen 
 import { STATUS_LABELS, STATUS_COLORS, PIPELINE_MILESTONES, formatDate, relativeTime } from '../constants';
 
 function Pipeline({ status }) {
+  if (['rejected', 'withdrawn'].includes(status)) return null;
+
   const activeIndex = PIPELINE_MILESTONES.findIndex((milestone) =>
     milestone.statuses.includes(status)
   );
-  if (activeIndex === -1) return null;
 
   return (
     <div className="pipeline" aria-label={`Pipeline stage: ${STATUS_LABELS[status] || status}`}>

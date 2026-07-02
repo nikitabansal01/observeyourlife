@@ -106,12 +106,6 @@ export const PIPELINE_STATUSES = [
 
 export const PIPELINE_MILESTONES = [
   {
-    key: 'applied',
-    label: 'Applied',
-    statuses: ['applied'],
-    colorKey: 'applied',
-  },
-  {
     key: 'screen',
     label: 'Recruiter / Phone',
     statuses: ['recruiter_screen'],

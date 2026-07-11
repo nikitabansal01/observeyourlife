@@ -47,7 +47,7 @@ export const BUSINESS_MODELS = ['b2b', 'b2c', 'both'];
 export const BUSINESS_MODEL_LABELS = {
   b2b: 'B2B',
   b2c: 'B2C',
-  both: 'B2B & B2C',
+  both: 'B2B2C',
 };
 
 export const FUNDING_STAGES = [

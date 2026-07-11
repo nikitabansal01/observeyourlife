@@ -66,6 +66,12 @@ function mergeApplication(existing, incoming) {
     lastFundingDate: incoming.lastFundingDate || base.lastFundingDate,
     lastFundingAmount: incoming.lastFundingAmount ?? base.lastFundingAmount,
     status: STATUSES.includes(incoming.status) ? incoming.status : base.status,
+    processSteps: Array.isArray(incoming.processSteps) && incoming.processSteps.length
+      ? incoming.processSteps
+      : base.processSteps,
+    processStepIndex: Number.isInteger(incoming.processStepIndex)
+      ? incoming.processStepIndex
+      : base.processStepIndex,
     interviewDates: incoming.interviewDates?.length
       ? [...new Set([...(base.interviewDates || []), ...incoming.interviewDates])]
       : base.interviewDates || [],

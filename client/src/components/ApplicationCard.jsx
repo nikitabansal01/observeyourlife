@@ -1,217 +1,244 @@
-import { Calendar, Building2, Briefcase, DollarSign, ArrowRight, Bell, BookOpen, Tag, ChevronDown } from 'lucide-react';
-import { STATUS_LABELS, STATUS_COLORS, PIPELINE_MILESTONES, formatDate, relativeTime } from '../constants';
+import { useState } from 'react';
+import { Plus, Pencil, Check, X } from 'lucide-react';
+import { STATUS_COLORS, INDUSTRY_LABELS, relativeTime } from '../constants';
+import {
+  getProcess,
+  isClosedStatus,
+  inferStatusFromStep,
+  formatBusinessModel,
+  formatIndustry,
+  closedStatusLabel,
+  normalizeProcessSteps,
+} from '../utils/processSteps';
 
-const STATUS_OPTIONS = Object.keys(STATUS_LABELS);
-
-function Pipeline({ status, onSelectStatus }) {
-  if (['rejected', 'withdrawn'].includes(status)) return null;
-
-  const activeIndex = PIPELINE_MILESTONES.findIndex((milestone) =>
-    milestone.statuses.includes(status)
-  );
+function ProcessTrack({ steps, index, closed, onSelect, accent }) {
+  if (closed) return null;
 
   return (
-    <div className="pipeline" aria-label={`Pipeline stage: ${STATUS_LABELS[status] || status}`}>
-      {PIPELINE_MILESTONES.map((milestone, i) => {
-        const done = activeIndex >= 0 && i <= activeIndex;
-        const current = milestone.statuses.includes(status);
-        const color = STATUS_COLORS[milestone.colorKey];
-        const targetStatus = milestone.statuses[0];
-        const editable = typeof onSelectStatus === 'function';
-
-        const content = (
-          <>
-            <div className="pipeline__milestone">
-              <div
-                className="pipeline__dot"
-                style={{ background: done ? color : undefined, boxShadow: current ? `0 0 12px ${color}` : undefined }}
-              />
-              <span className="pipeline__label">{milestone.label}</span>
-            </div>
-            {i < PIPELINE_MILESTONES.length - 1 && (
-              <div className="pipeline__line" style={{ background: done && activeIndex > i ? color : undefined }} />
-            )}
-          </>
-        );
-
-        if (!editable) {
-          return (
-            <div
-              key={milestone.key}
-              className={`pipeline__step ${done ? 'pipeline__step--done' : ''} ${current ? 'pipeline__step--current' : ''}`}
-              title={milestone.label}
-            >
-              {content}
-            </div>
-          );
-        }
-
+    <div
+      className="process-track"
+      style={{ '--process-accent': accent }}
+      role="list"
+      aria-label={`Interview process, step ${index + 1} of ${steps.length}`}
+    >
+      {steps.map((label, i) => {
+        const done = i <= index;
+        const current = i === index;
         return (
-          <button
-            key={milestone.key}
-            type="button"
-            className={`pipeline__step pipeline__step--btn ${done ? 'pipeline__step--done' : ''} ${current ? 'pipeline__step--current' : ''}`}
-            title={`Set status to ${STATUS_LABELS[targetStatus]}`}
-            aria-pressed={current}
-            onClick={() => onSelectStatus(targetStatus)}
-          >
-            {content}
-          </button>
+          <div key={`${label}-${i}`} className="process-track__item" role="listitem">
+            {i > 0 && (
+              <div
+                className={`process-track__line ${i <= index ? 'process-track__line--done' : ''}`}
+                aria-hidden
+              />
+            )}
+            <button
+              type="button"
+              className={`process-track__step ${done ? 'process-track__step--done' : ''} ${current ? 'process-track__step--current' : ''}`}
+              onClick={() => onSelect?.(i)}
+              disabled={!onSelect}
+              title={onSelect ? `Set current stage to ${label}` : label}
+              aria-current={current ? 'step' : undefined}
+              aria-label={`${label}${current ? ', current stage' : done ? ', completed' : ''}`}
+            >
+              <span className="process-track__dot" />
+              <span className="process-track__label">{label}</span>
+            </button>
+          </div>
         );
       })}
     </div>
   );
 }
 
-function StatusSelect({ status, company, onChange }) {
-  const statusColor = STATUS_COLORS[status] || '#6B7280';
+function ProcessEditor({ steps, onSave, onCancel }) {
+  const [draft, setDraft] = useState(() => [...steps]);
+
+  const updateAt = (i, value) => {
+    setDraft((prev) => prev.map((step, idx) => (idx === i ? value : step)));
+  };
+
+  const removeAt = (i) => {
+    setDraft((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i)));
+  };
+
+  const addStep = () => {
+    setDraft((prev) => [...prev, `Round ${prev.length + 1}`]);
+  };
 
   return (
-    <label
-      className="status-select"
-      style={{
-        '--accent': statusColor,
-        background: `${statusColor}22`,
-        color: statusColor,
-        borderColor: `${statusColor}55`,
-      }}
-    >
-      <span className="visually-hidden">Status for {company || 'company'}</span>
-      <select
-        className="status-select__control"
-        value={status || 'applied'}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={`Update status for ${company || 'company'}`}
-      >
-        {STATUS_OPTIONS.map((key) => (
-          <option key={key} value={key}>
-            {STATUS_LABELS[key]}
-          </option>
+    <div className="process-editor">
+      <p className="process-editor__hint">Name each round for this company — every process can be different.</p>
+      <ul className="process-editor__list">
+        {draft.map((step, i) => (
+          <li key={i} className="process-editor__row">
+            <span className="process-editor__num">{i + 1}</span>
+            <input
+              className="process-editor__input"
+              value={step}
+              onChange={(e) => updateAt(i, e.target.value)}
+              aria-label={`Step ${i + 1} name`}
+            />
+            <button
+              type="button"
+              className="process-editor__remove"
+              onClick={() => removeAt(i)}
+              disabled={draft.length <= 1}
+              aria-label={`Remove step ${i + 1}`}
+            >
+              <X size={14} />
+            </button>
+          </li>
         ))}
-      </select>
-      <ChevronDown size={14} className="status-select__chevron" aria-hidden />
-    </label>
+      </ul>
+      <div className="process-editor__actions">
+        <button type="button" className="process-editor__btn" onClick={addStep}>
+          <Plus size={14} />
+          Add round
+        </button>
+        <div className="process-editor__actions-end">
+          <button type="button" className="process-editor__btn process-editor__btn--ghost" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="process-editor__btn process-editor__btn--primary"
+            onClick={() => onSave(normalizeProcessSteps(draft))}
+          >
+            <Check size={14} />
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
-export default function ApplicationCard({ app, labels = [], onUpdate }) {
-  const statusColor = STATUS_COLORS[app.status] || '#6B7280';
-  const attachedLabels = labels.filter((label) => (app.labelIds || []).includes(label.id));
+export default function ApplicationCard({ app, onUpdate }) {
+  const [editingProcess, setEditingProcess] = useState(false);
+  const { steps, index, currentLabel, total } = getProcess(app);
+  const closed = isClosedStatus(app.status);
+  const accent = STATUS_COLORS[app.status] || '#8B5CF6';
   const canUpdate = typeof onUpdate === 'function';
+  const industry = formatIndustry(app.industry, INDUSTRY_LABELS);
+  const model = formatBusinessModel(app.businessModel);
+  const subtleMeta = [industry, model].filter(Boolean);
 
-  const setStatus = (status) => {
-    if (!canUpdate || status === app.status) return;
-    onUpdate(app.id, { status });
+  const persist = (updates) => {
+    if (!canUpdate) return;
+    onUpdate(app.id, updates);
   };
 
-  const toggleLabel = (labelId) => {
+  const setStepIndex = (nextIndex) => {
+    if (!canUpdate || closed) return;
+    const clamped = Math.max(0, Math.min(nextIndex, steps.length - 1));
+    const label = steps[clamped];
+    persist({
+      processSteps: steps,
+      processStepIndex: clamped,
+      status: inferStatusFromStep(label, clamped, steps.length),
+    });
+  };
+
+  const saveProcess = (nextSteps) => {
+    const nextIndex = Math.min(index, nextSteps.length - 1);
+    persist({
+      processSteps: nextSteps,
+      processStepIndex: nextIndex,
+      status: closed
+        ? app.status
+        : inferStatusFromStep(nextSteps[nextIndex], nextIndex, nextSteps.length),
+    });
+    setEditingProcess(false);
+  };
+
+  const setOutcome = (status) => {
     if (!canUpdate) return;
-    const selectedIds = app.labelIds || [];
-    const next = selectedIds.includes(labelId)
-      ? selectedIds.filter((id) => id !== labelId)
-      : [...selectedIds, labelId];
-    onUpdate(app.id, { labelIds: next });
+    if (isClosedStatus(status)) {
+      persist({ status });
+      return;
+    }
+    persist({
+      status: inferStatusFromStep(steps[index], index, steps.length),
+      processSteps: steps,
+      processStepIndex: index,
+    });
   };
 
   return (
-    <article className="app-card" style={{ '--accent': statusColor }}>
+    <article className={`app-card app-card--simple ${closed ? 'app-card--closed' : ''}`} style={{ '--accent': accent }}>
       <header className="app-card__header">
-        <div>
+        <div className="app-card__identity">
           <div className="app-card__title-row">
             <h3>{app.company || 'Unknown company'}</h3>
             {app.isExample && <span className="example-badge">Example</span>}
           </div>
-          {app.positionTitle && (
-            <p className="app-card__role">
-              <Briefcase size={14} />
-              {app.positionTitle}
-            </p>
-          )}
+          {app.positionTitle && <p className="app-card__role">{app.positionTitle}</p>}
         </div>
-        {canUpdate ? (
-          <StatusSelect status={app.status} company={app.company} onChange={setStatus} />
-        ) : (
-          <span className="status-badge" style={{ background: `${statusColor}22`, color: statusColor, borderColor: `${statusColor}55` }}>
-            {STATUS_LABELS[app.status] || app.status}
-          </span>
+        {canUpdate && (
+          <select
+            className="app-card__outcome"
+            value={closed ? app.status : 'active'}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === 'active') setOutcome('applied');
+              else setOutcome(value);
+            }}
+            aria-label={`Outcome for ${app.company || 'company'}`}
+          >
+            <option value="active">In process</option>
+            <option value="rejected">Rejected</option>
+            <option value="withdrawn">Withdrawn</option>
+          </select>
         )}
       </header>
 
-      <Pipeline status={app.status} onSelectStatus={canUpdate ? setStatus : undefined} />
-
-      <div className="app-card__meta">
-        {app.industry && (
-          <span>
-            <Building2 size={14} />
-            {app.industry}
-          </span>
-        )}
-        {app.fundingStage && (
-          <span>
-            <DollarSign size={14} />
-            {app.fundingStage}
-          </span>
-        )}
-        {app.interviewDates?.length > 0 && (
-          <span>
-            <Calendar size={14} />
-            {app.interviewDates.map(formatDate).join(', ')}
-          </span>
-        )}
-      </div>
-
-      {(app.needsFollowUp || app.needsPrep || attachedLabels.length > 0 || (canUpdate && labels.length > 0)) && (
-        <div className="app-card__flags">
-          {app.needsFollowUp && (
-            <span className="flag flag--followup">
-              <Bell size={13} /> Follow up
+      {closed ? (
+        <p className="app-card__closed-label">{closedStatusLabel(app.status)}</p>
+      ) : (
+        <>
+          <div className="app-card__process-meta">
+            <span className="app-card__step-count">
+              Step {index + 1} of {total}
             </span>
+            <span className="app-card__step-name">{currentLabel}</span>
+          </div>
+
+          {editingProcess ? (
+            <ProcessEditor
+              steps={steps}
+              onSave={saveProcess}
+              onCancel={() => setEditingProcess(false)}
+            />
+          ) : (
+            <>
+              <ProcessTrack
+                steps={steps}
+                index={index}
+                closed={closed}
+                onSelect={canUpdate ? setStepIndex : undefined}
+                accent={accent}
+              />
+              {canUpdate && (
+                <button
+                  type="button"
+                  className="app-card__edit-process"
+                  onClick={() => setEditingProcess(true)}
+                >
+                  <Pencil size={12} />
+                  Edit process
+                </button>
+              )}
+            </>
           )}
-          {app.needsPrep && (
-            <span className="flag flag--prep">
-              <BookOpen size={13} /> Needs prep
-            </span>
-          )}
-          {canUpdate && labels.length > 0
-            ? labels.map((label) => {
-                const on = (app.labelIds || []).includes(label.id);
-                return (
-                  <button
-                    key={label.id}
-                    type="button"
-                    className={`flag flag--label flag--toggle ${on ? 'flag--toggle-on' : ''}`}
-                    aria-pressed={on}
-                    onClick={() => toggleLabel(label.id)}
-                  >
-                    <Tag size={13} />
-                    {label.name}
-                  </button>
-                );
-              })
-            : attachedLabels.map((label) => (
-                <span key={label.id} className="flag flag--label">
-                  <Tag size={13} />
-                  {label.name}
-                </span>
-              ))}
-        </div>
+        </>
       )}
 
-      {app.nextSteps?.length > 0 && (
-        <div className="app-card__next">
-          <strong>Next steps</strong>
-          <ul>
-            {app.nextSteps.map((step) => (
-              <li key={step}>
-                <ArrowRight size={14} />
-                {step}
-              </li>
-            ))}
-          </ul>
-        </div>
+      {subtleMeta.length > 0 && (
+        <p className="app-card__subtle">
+          {subtleMeta.join(' · ')}
+        </p>
       )}
-
-      {app.notes && <p className="app-card__notes">{app.notes}</p>}
 
       <footer className="app-card__footer">Updated {relativeTime(app.updatedAt)}</footer>
     </article>

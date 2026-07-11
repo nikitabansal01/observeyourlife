@@ -150,7 +150,7 @@ export default function App() {
             <LayoutGrid size={22} />
           </div>
           <div>
-            <h1>PA for NB</h1>
+            <h1>O.B.S.E.R.V.E</h1>
             <p>Design your life — one area at a time</p>
           </div>
         </div>

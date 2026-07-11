@@ -6,3 +6,5 @@ db.json
 db.json.migrated
 data/
 .DS_Store
+.vercel
+.env*

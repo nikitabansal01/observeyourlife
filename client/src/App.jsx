@@ -150,8 +150,10 @@ export default function App() {
             <LayoutGrid size={22} />
           </div>
           <div>
-            <h1>O.B.S.E.R.V.E</h1>
-            <p>Design your life — one area at a time</p>
+            <h1 className="header__wordmark">
+              Observe<span className="header__wordmark-life"> life</span>
+            </h1>
+            <p>Make it a point — notice how full each area feels</p>
           </div>
         </div>
         <div className="header__meta">

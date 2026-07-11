@@ -1,5 +1,5 @@
-import { Fragment, useMemo, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Fragment, useMemo, useState, useRef, useEffect } from 'react';
+import { Search, X, Plus, Tag } from 'lucide-react';
 import {
   INDUSTRIES,
   INDUSTRY_LABELS,
@@ -9,17 +9,11 @@ import {
   FUNDING_STAGE_LABELS,
   FINANCE_STANDINGS,
   FINANCE_STANDING_LABELS,
-  FINANCE_STANDING_COLORS,
   STATUS_LABELS,
   STATUS_COLORS,
-  formatDate,
   relativeTime,
 } from '../constants';
-import {
-  filterCompanies,
-  getFinanceStanding,
-  formatFundingAmount,
-} from '../utils/companyFilters';
+import { filterCompanies } from '../utils/companyFilters';
 
 const EMPTY_FILTERS = {
   industry: '',
@@ -30,13 +24,13 @@ const EMPTY_FILTERS = {
 };
 
 const GROUP_BY_OPTIONS = [
-  { value: '', label: 'No grouping' },
+  { value: '', label: 'None' },
   { value: 'industry', label: 'Industry' },
-  { value: 'businessModel', label: 'Business model' },
+  { value: 'businessModel', label: 'Model' },
   { value: 'status', label: 'Status' },
 ];
 
-const COLUMN_COUNT = 11;
+const COLUMN_COUNT = 8;
 
 function byRecency(a, b) {
   return new Date(b.updatedAt) - new Date(a.updatedAt);
@@ -80,7 +74,7 @@ function buildGroups(apps, groupBy) {
 
 function FilterSelect({ label, value, onChange, options, labels }) {
   return (
-    <label className="company-filter">
+    <label className={`company-filter ${value ? 'company-filter--active' : ''}`}>
       <span className="company-filter__label">{label}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)} className="company-filter__select">
         <option value="">All</option>
@@ -94,9 +88,91 @@ function FilterSelect({ label, value, onChange, options, labels }) {
   );
 }
 
+function QuietSelect({ value, onChange, options, labels, emptyLabel = '—', ariaLabel, className = '' }) {
+  const empty = !value;
+  return (
+    <select
+      className={`company-table__input ${empty ? 'company-table__input--empty' : ''} ${className}`}
+      value={value || ''}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label={ariaLabel}
+    >
+      <option value="">{emptyLabel}</option>
+      {options.map((opt) => (
+        <option key={opt} value={opt}>
+          {labels[opt] || opt}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function LabelsCell({ app, labels, onToggle }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const selectedIds = app.labelIds || [];
+  const attached = labels.filter((label) => selectedIds.includes(label.id));
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (e) => {
+      if (!rootRef.current?.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open]);
+
+  if (labels.length === 0) {
+    return <span className="company-table__labels-empty">—</span>;
+  }
+
+  return (
+    <div className="company-table__labels" ref={rootRef}>
+      <div className="company-table__labels-row">
+        {attached.length === 0 ? (
+          <span className="company-table__labels-empty">None</span>
+        ) : (
+          attached.map((label) => (
+            <span key={label.id} className="company-table__label-chip company-table__label-chip--on">
+              {label.name}
+            </span>
+          ))
+        )}
+        <button
+          type="button"
+          className={`company-table__labels-edit ${open ? 'company-table__labels-edit--open' : ''}`}
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-label={`Edit labels for ${app.company || 'company'}`}
+          title="Edit labels"
+        >
+          {attached.length === 0 ? <Plus size={12} /> : <Tag size={12} />}
+        </button>
+      </div>
+
+      {open && (
+        <div className="company-table__labels-menu" role="group" aria-label={`Toggle labels for ${app.company}`}>
+          {labels.map((label) => {
+            const on = selectedIds.includes(label.id);
+            return (
+              <button
+                key={label.id}
+                type="button"
+                className={`company-table__labels-option ${on ? 'company-table__labels-option--on' : ''}`}
+                aria-pressed={on}
+                onClick={() => onToggle(label.id)}
+              >
+                {label.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CompanyTableRow({ app, labels, onUpdate, hideColumn }) {
-  const financeStanding = getFinanceStanding(app);
-  const standingColor = FINANCE_STANDING_COLORS[financeStanding];
   const statusColor = STATUS_COLORS[app.status] || '#6B7280';
   const selectedIds = app.labelIds || [];
 
@@ -124,30 +200,11 @@ function CompanyTableRow({ app, labels, onUpdate, hideColumn }) {
         </span>
         <span className="company-table__updated">{relativeTime(app.updatedAt)}</span>
       </th>
-      <td className="company-table__cell company-table__cell--muted">
+      <td className="company-table__cell company-table__cell--muted company-table__cell--role">
         {app.positionTitle || '—'}
       </td>
       <td className="company-table__cell">
-        <div className="company-table__labels" role="group" aria-label={`Labels for ${app.company}`}>
-          {labels.length === 0 ? (
-            <span className="company-table__labels-empty">No labels</span>
-          ) : (
-            labels.map((label) => {
-              const on = selectedIds.includes(label.id);
-              return (
-                <button
-                  key={label.id}
-                  type="button"
-                  className={`company-table__label-chip ${on ? 'company-table__label-chip--on' : ''}`}
-                  aria-pressed={on}
-                  onClick={() => toggleLabel(label.id)}
-                >
-                  {label.name}
-                </button>
-              );
-            })
-          )}
-        </div>
+        <LabelsCell app={app} labels={labels} onToggle={toggleLabel} />
       </td>
       {!hideColumn?.status && (
         <td className="company-table__cell">
@@ -168,88 +225,46 @@ function CompanyTableRow({ app, labels, onUpdate, hideColumn }) {
       )}
       {!hideColumn?.industry && (
         <td className="company-table__cell">
-          <select
-            className="company-table__input"
-            value={app.industry || ''}
-            onChange={(e) => handleChange('industry', e.target.value)}
-            aria-label={`Industry for ${app.company}`}
-          >
-            <option value="">—</option>
-            {INDUSTRIES.map((i) => (
-              <option key={i} value={i}>
-                {INDUSTRY_LABELS[i]}
-              </option>
-            ))}
-          </select>
+          <QuietSelect
+            value={app.industry}
+            onChange={(v) => handleChange('industry', v)}
+            options={INDUSTRIES}
+            labels={INDUSTRY_LABELS}
+            ariaLabel={`Industry for ${app.company}`}
+          />
         </td>
       )}
       {!hideColumn?.businessModel && (
         <td className="company-table__cell">
-          <select
-            className="company-table__input"
-            value={app.businessModel || ''}
-            onChange={(e) => handleChange('businessModel', e.target.value)}
-            aria-label={`Business model for ${app.company}`}
-          >
-            <option value="">—</option>
-            {BUSINESS_MODELS.map((m) => (
-              <option key={m} value={m}>
-                {BUSINESS_MODEL_LABELS[m]}
-              </option>
-            ))}
-          </select>
+          <QuietSelect
+            value={app.businessModel}
+            onChange={(v) => handleChange('businessModel', v)}
+            options={BUSINESS_MODELS}
+            labels={BUSINESS_MODEL_LABELS}
+            ariaLabel={`Business model for ${app.company}`}
+          />
         </td>
       )}
       <td className="company-table__cell">
-        <select
-          className="company-table__input"
-          value={app.fundingStage || ''}
-          onChange={(e) => handleChange('fundingStage', e.target.value)}
-          aria-label={`Funding stage for ${app.company}`}
-        >
-          <option value="">—</option>
-          {FUNDING_STAGES.map((s) => (
-            <option key={s} value={s}>
-              {FUNDING_STAGE_LABELS[s]}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td className="company-table__cell">
-        <input
-          className="company-table__input company-table__input--date"
-          type="date"
-          value={app.lastFundingDate ? app.lastFundingDate.slice(0, 10) : ''}
-          onChange={(e) =>
-            handleChange('lastFundingDate', e.target.value ? new Date(e.target.value).toISOString() : '')
-          }
-          aria-label={`Last funding date for ${app.company}`}
+        <QuietSelect
+          value={app.fundingStage}
+          onChange={(v) => handleChange('fundingStage', v)}
+          options={FUNDING_STAGES}
+          labels={FUNDING_STAGE_LABELS}
+          ariaLabel={`Funding stage for ${app.company}`}
         />
       </td>
       <td className="company-table__cell company-table__cell--amount">
         <input
-          className="company-table__input company-table__input--number"
+          className={`company-table__input company-table__input--number ${app.lastFundingAmount == null || app.lastFundingAmount === '' ? 'company-table__input--empty' : ''}`}
           type="number"
           min="0"
           step="0.1"
           placeholder="—"
           value={app.lastFundingAmount ?? ''}
           onChange={(e) => handleChange('lastFundingAmount', e.target.value)}
-          aria-label={`Funding amount for ${app.company}`}
+          aria-label={`Funding amount ($M) for ${app.company}`}
         />
-      </td>
-      <td className="company-table__cell">
-        <span
-          className="company-table__standing"
-          style={{ '--standing-color': standingColor }}
-        >
-          {FINANCE_STANDING_LABELS[financeStanding]}
-        </span>
-      </td>
-      <td className="company-table__cell company-table__cell--muted company-table__cell--notes">
-        {app.lastFundingDate
-          ? `${formatDate(app.lastFundingDate)} · ${formatFundingAmount(app.lastFundingAmount)}`
-          : '—'}
       </td>
     </tr>
   );
@@ -268,46 +283,13 @@ export default function CompanyBrowser({ applications, labels = [], onUpdate }) 
 
   const hideColumn = groupBy ? { [groupBy]: true } : {};
   const visibleColumns = COLUMN_COUNT - (groupBy ? 1 : 0);
-
   const hasFilters = Object.values(filters).some(Boolean);
 
-  const standingCounts = applications.reduce((acc, app) => {
-    const s = getFinanceStanding(app);
-    acc[s] = (acc[s] || 0) + 1;
-    return acc;
-  }, {});
-
   return (
-    <section className="company-browser">
-      <div className="company-browser__header">
-        <div>
-          <h2>Browse companies</h2>
-          <p>Compare all companies side by side — scroll horizontally if needed</p>
-        </div>
-        <div className="company-browser__summary">
-          {FINANCE_STANDINGS.filter((s) => standingCounts[s]).map((s) => (
-            <button
-              key={s}
-              type="button"
-              className={`standing-pill ${filters.financeStanding === s ? 'standing-pill--active' : ''}`}
-              style={{ '--standing-color': FINANCE_STANDING_COLORS[s] }}
-              onClick={() =>
-                setFilters((f) => ({
-                  ...f,
-                  financeStanding: f.financeStanding === s ? '' : s,
-                }))
-              }
-            >
-              <span className="standing-pill__count">{standingCounts[s]}</span>
-              {FINANCE_STANDING_LABELS[s]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="company-browser__filters">
+    <section className="company-browser company-browser--quiet">
+      <div className="company-browser__toolbar">
         <div className="company-search">
-          <Search size={16} />
+          <Search size={15} />
           <input
             type="search"
             placeholder="Search companies…"
@@ -324,26 +306,42 @@ export default function CompanyBrowser({ applications, labels = [], onUpdate }) 
           labels={INDUSTRY_LABELS}
         />
         <FilterSelect
-          label="Business model"
+          label="Model"
           value={filters.businessModel}
           onChange={(v) => setFilters((f) => ({ ...f, businessModel: v }))}
           options={BUSINESS_MODELS}
           labels={BUSINESS_MODEL_LABELS}
         />
         <FilterSelect
-          label="Fundraising stage"
+          label="Stage"
           value={filters.fundingStage}
           onChange={(v) => setFilters((f) => ({ ...f, fundingStage: v }))}
           options={FUNDING_STAGES}
           labels={FUNDING_STAGE_LABELS}
         />
         <FilterSelect
-          label="Finance standing"
+          label="Finance"
           value={filters.financeStanding}
           onChange={(v) => setFilters((f) => ({ ...f, financeStanding: v }))}
           options={FINANCE_STANDINGS}
           labels={FINANCE_STANDING_LABELS}
         />
+
+        <label className={`company-filter ${groupBy ? 'company-filter--active' : ''}`}>
+          <span className="company-filter__label">Group</span>
+          <select
+            className="company-filter__select"
+            value={groupBy}
+            onChange={(e) => setGroupBy(e.target.value)}
+            aria-label="Group companies by"
+          >
+            {GROUP_BY_OPTIONS.map((opt) => (
+              <option key={opt.value || 'none'} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
         {hasFilters && (
           <button
@@ -355,33 +353,11 @@ export default function CompanyBrowser({ applications, labels = [], onUpdate }) 
             Clear
           </button>
         )}
-      </div>
 
-      <div className="company-browser__group-bar">
-        <span className="company-browser__group-label">Group by</span>
-        <div className="group-tabs" role="tablist" aria-label="Group companies by">
-          {GROUP_BY_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              role="tab"
-              aria-selected={groupBy === opt.value}
-              className={`group-tab ${groupBy === opt.value ? 'group-tab--active' : ''}`}
-              onClick={() => setGroupBy(opt.value)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+        <p className="company-browser__count">
+          {filtered.length}/{applications.length}
+        </p>
       </div>
-
-      <p className="company-browser__count">
-        Showing {filtered.length} of {applications.length} companies
-        {groupBy
-          ? ` · grouped by ${GROUP_BY_OPTIONS.find((o) => o.value === groupBy)?.label.toLowerCase()}`
-          : ''}
-        {' · '}sorted by recency
-      </p>
 
       <div className="company-table-wrap">
         {filtered.length === 0 ? (
@@ -400,10 +376,7 @@ export default function CompanyBrowser({ applications, labels = [], onUpdate }) 
                 {!hideColumn.industry && <th className="company-table__th">Industry</th>}
                 {!hideColumn.businessModel && <th className="company-table__th">Model</th>}
                 <th className="company-table__th">Stage</th>
-                <th className="company-table__th">Last round</th>
-                <th className="company-table__th">$M raised</th>
-                <th className="company-table__th">Finance</th>
-                <th className="company-table__th">Funding summary</th>
+                <th className="company-table__th">$M</th>
               </tr>
             </thead>
             <tbody>
@@ -414,7 +387,7 @@ export default function CompanyBrowser({ applications, labels = [], onUpdate }) 
                       <td colSpan={visibleColumns}>
                         <span className="company-table__group-label">{group.label}</span>
                         <span className="company-table__group-count">
-                          {group.items.length} {group.items.length === 1 ? 'company' : 'companies'}
+                          {group.items.length}
                         </span>
                       </td>
                     </tr>

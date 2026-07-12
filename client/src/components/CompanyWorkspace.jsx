@@ -3,21 +3,16 @@ import {
   ArrowLeft,
   Building2,
   Briefcase,
-  CalendarClock,
   ClipboardList,
   Compass,
-  MessageSquare,
   NotebookPen,
   Search,
-  Sparkles,
-  Mic,
 } from 'lucide-react';
 import { STATUS_COLORS, STATUS_LABELS, formatDate } from '../constants';
 import { getProcess, isClosedStatus, inferStatusFromStep } from '../utils/processSteps';
 import {
   appendStageHistory,
   buildStageTimeline,
-  getInterviewPrepDefaults,
   getOverviewDefaults,
   getReflectionDefaults,
   getResearchDefaults,
@@ -29,7 +24,6 @@ const TABS = [
   { id: 'overview', label: 'Overview', shortLabel: 'Overview', icon: Building2 },
   { id: 'research', label: 'Company Research', shortLabel: 'Research', icon: Search },
   { id: 'fit', label: 'Role Fit', shortLabel: 'Fit', icon: Compass },
-  { id: 'prep', label: 'Interview Prep', shortLabel: 'Prep', icon: MessageSquare },
   { id: 'notes', label: 'Notes and Reflection', shortLabel: 'Notes', icon: NotebookPen },
 ];
 
@@ -88,22 +82,19 @@ export default function CompanyWorkspace({
   direction = null,
   onLearningFromReflection,
 }) {
-  const [tab, setTab] = useState(initialTab);
-  const [mockStarted, setMockStarted] = useState(false);
+  const [tab, setTab] = useState(initialTab === 'prep' ? 'overview' : initialTab);
 
   const accent = STATUS_COLORS[app.status] || '#8B5CF6';
   const { steps, index, currentLabel } = getProcess(app);
   const overview = useMemo(() => getOverviewDefaults(app), [app]);
   const research = useMemo(() => getResearchDefaults(app), [app]);
   const roleFit = useMemo(() => getRoleFitDefaults(app, profile), [app, profile]);
-  const prep = useMemo(() => getInterviewPrepDefaults(app, profile), [app, profile]);
   const reflection = useMemo(() => getReflectionDefaults(app), [app]);
   const timeline = useMemo(() => buildStageTimeline(app), [app]);
-  const pathTitle = direction?.primaryTitle || roleFit.pathTitle || prep.pathTitle;
+  const pathTitle = direction?.primaryTitle || roleFit.pathTitle;
 
   useEffect(() => {
-    setTab(initialTab);
-    setMockStarted(false);
+    setTab(initialTab === 'prep' ? 'overview' : initialTab);
   }, [app.id, initialTab]);
 
   const patchWorkspace = (partial, extra = {}) => {
@@ -419,71 +410,6 @@ export default function CompanyWorkspace({
                 onChange={(stories) => patchWorkspace({ roleFit: { ...roleFit, stories } })}
                 placeholder="Story to prepare"
               />
-            </article>
-          </div>
-        )}
-
-        {tab === 'prep' && (
-          <div className="workspace-panel">
-            <p className="workspace-muted">
-              Using resume context, <strong>{pathTitle}</strong>, {overview.company}, and JD notes for this loop.
-            </p>
-            <div className="workspace-panel__grid workspace-panel__grid--fit">
-              <article className="workspace-card">
-                <h3>Likely questions</h3>
-                <ListEditor
-                  items={prep.likelyQuestions}
-                  onChange={(likelyQuestions) => patchWorkspace({ interviewPrep: { ...prep, likelyQuestions } })}
-                  placeholder="Interview question"
-                />
-              </article>
-              <article className="workspace-card">
-                <h3>Suggested STAR stories</h3>
-                <ListEditor
-                  items={prep.starStories}
-                  onChange={(starStories) => patchWorkspace({ interviewPrep: { ...prep, starStories } })}
-                  placeholder="STAR story"
-                />
-              </article>
-              <article className="workspace-card">
-                <h3>Questions to ask</h3>
-                <ListEditor
-                  items={prep.questionsToAsk}
-                  onChange={(questionsToAsk) => patchWorkspace({ interviewPrep: { ...prep, questionsToAsk } })}
-                  placeholder="Question for them"
-                />
-              </article>
-              <article className="workspace-card">
-                <h3>Topics to study</h3>
-                <ListEditor
-                  items={prep.studyTopics}
-                  onChange={(studyTopics) => patchWorkspace({ interviewPrep: { ...prep, studyTopics } })}
-                  placeholder="Study topic"
-                />
-              </article>
-            </div>
-
-            <article className="workspace-card workspace-card--cta">
-              <div className="workspace-card__header">
-                <Mic size={18} />
-                <div>
-                  <h3>Mock interview</h3>
-                  <p>Practice this company’s loop with your saved stories and questions.</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="submit-btn"
-                onClick={() => setMockStarted(true)}
-              >
-                <Sparkles size={16} />
-                {mockStarted ? 'Mock session ready' : 'Start mock interview'}
-              </button>
-              {mockStarted && (
-                <p className="workspace-muted" role="status">
-                  Mock entry point saved for {overview.company}. Full coaching flow comes next.
-                </p>
-              )}
             </article>
           </div>
         )}

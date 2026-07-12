@@ -46,7 +46,7 @@ export default function JobTrackerArea({
   useEffect(() => {
     if (!focusCompanyId) return;
     setSelectedAppId(focusCompanyId);
-    setWorkspaceTab(focusWorkspaceTab || 'prep');
+    setWorkspaceTab(focusWorkspaceTab || 'overview');
     onFocusConsumed?.();
   }, [focusCompanyId, focusWorkspaceTab, onFocusConsumed]);
 
@@ -74,9 +74,7 @@ export default function JobTrackerArea({
       {!nested && (
         <header className="ui-section ui-section--header job-tracker-area__intro">
           <h2>Opportunities</h2>
-          <p>
-            Track every opportunity in your pipeline — the same tracker, now connected to your career direction and interview prep.
-          </p>
+          <p>Track status, stages, recruiter notes, and timeline for every opportunity.</p>
         </header>
       )}
 

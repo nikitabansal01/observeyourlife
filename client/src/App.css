@@ -4395,6 +4395,117 @@
   }
 }
 
+/* Interview Prep workspace */
+.prep-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-gap);
+  animation: slide-up 0.35s ease;
+}
+
+.prep-workspace__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.prep-workspace__back {
+  align-self: flex-start;
+}
+
+.prep-workspace__crumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.prep-workspace__crumb span:nth-child(odd):not(:last-child) {
+  color: var(--text-muted);
+}
+
+.prep-workspace__crumb span:last-child {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.prep-workspace__title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.prep-workspace__title .ui-block__label {
+  margin-bottom: 0.35rem;
+}
+
+.prep-workspace__title h2 {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.2rem;
+}
+
+.prep-workspace__title > div > p:last-child {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.prep-workspace__status {
+  flex-shrink: 0;
+  padding: 0.35rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--status-color, var(--accent-cyan));
+  border: 1px solid color-mix(in srgb, var(--status-color, var(--accent-cyan)) 35%, transparent);
+  background: color-mix(in srgb, var(--status-color, var(--accent-cyan)) 12%, transparent);
+}
+
+.prep-workspace__tabs {
+  max-width: 100%;
+}
+
+.prep-workspace__body {
+  min-width: 0;
+}
+
+.prep-workspace__progress {
+  margin-bottom: 0.85rem;
+}
+
+.prep-workspace__checklist {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+}
+
+.prep-workspace__checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.prep-workspace__checklist li.is-done {
+  color: var(--text-muted);
+}
+
+.prep-workspace__checklist li span {
+  flex-shrink: 0;
+  color: var(--accent-cyan);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 /* Interview Prep hub */
 .interview-hub {
   display: flex;

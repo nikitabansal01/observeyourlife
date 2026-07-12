@@ -44,7 +44,10 @@ export default function Today({
 
   const handlePrepareNow = () => {
     if (nextInterview?.id && onContinuePrep) {
-      onContinuePrep(nextInterview.id);
+      onContinuePrep(nextInterview.id, {
+        roundIndex: nextInterview.roundIndex,
+        roundLabel: nextInterview.roundLabel || nextInterview.stage,
+      });
       return;
     }
     onNavigate?.('interview');

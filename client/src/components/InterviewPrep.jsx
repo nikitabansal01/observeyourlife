@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   CalendarClock,
   CheckSquare,
@@ -20,17 +20,38 @@ import {
 } from '../utils/interviewPrepHub';
 import { getWorkspace } from '../utils/companyWorkspace';
 import EmptyState from './EmptyState';
+import InterviewPrepWorkspace from './InterviewPrepWorkspace';
 
 export default function InterviewPrep({
   applications = [],
   profile = null,
   direction: directionProp,
-  onContinuePrep,
   onUpdateApplication,
   onNavigate,
+  focusAppId = null,
+  focusRoundIndex = null,
+  focusRoundLabel = null,
+  onFocusConsumed,
 }) {
   const direction = directionProp || getCareerDirectionSnapshot(profile);
   const [practiced, setPracticed] = useState(() => getPracticedQuestions());
+  const [selectedPrep, setSelectedPrep] = useState(null);
+
+  useEffect(() => {
+    const onSync = () => setPracticed(getPracticedQuestions());
+    window.addEventListener('career-os-synced', onSync);
+    return () => window.removeEventListener('career-os-synced', onSync);
+  }, []);
+
+  useEffect(() => {
+    if (!focusAppId) return;
+    setSelectedPrep({
+      appId: focusAppId,
+      roundIndex: focusRoundIndex,
+      roundLabel: focusRoundLabel,
+    });
+    onFocusConsumed?.();
+  }, [focusAppId, focusRoundIndex, focusRoundLabel, onFocusConsumed]);
 
   const interviews = useMemo(
     () => getUpcomingInterviewCards(applications, profile),
@@ -45,7 +66,22 @@ export default function InterviewPrep({
     [applications, practiced]
   );
 
+  const selectedApp = useMemo(() => {
+    if (!selectedPrep?.appId) return null;
+    return applications.find((app) => app.id === selectedPrep.appId) || null;
+  }, [applications, selectedPrep]);
+
   const pathLabel = direction?.primaryTitle || 'your target path';
+
+  const openPrepWorkspace = (item) => {
+    const appId = item?.appId || item?.id;
+    if (!appId) return;
+    setSelectedPrep({
+      appId,
+      roundIndex: item.roundIndex ?? null,
+      roundLabel: item.roundLabel || item.stage || null,
+    });
+  };
 
   const markPracticed = (item) => {
     const entry = {
@@ -79,6 +115,19 @@ export default function InterviewPrep({
     setLearningTab('stories');
     onNavigate?.('learning');
   };
+
+  if (selectedApp) {
+    return (
+      <InterviewPrepWorkspace
+        app={selectedApp}
+        roundIndex={selectedPrep?.roundIndex}
+        roundLabel={selectedPrep?.roundLabel}
+        onBack={() => setSelectedPrep(null)}
+        profile={profile}
+        direction={direction}
+      />
+    );
+  }
 
   return (
     <section className="interview-hub page-section">
@@ -123,7 +172,7 @@ export default function InterviewPrep({
                         <h4>{item.company}</h4>
                         <p>{item.role}</p>
                       </div>
-                      <span className="interview-card__stage">{item.stage}</span>
+                      <span className="interview-card__stage">{item.roundLabel || item.stage}</span>
                     </div>
 
                     <dl className="interview-card__meta">
@@ -156,7 +205,7 @@ export default function InterviewPrep({
                     <button
                       type="button"
                       className="submit-btn interview-card__cta"
-                      onClick={() => onContinuePrep?.(item.id)}
+                      onClick={() => openPrepWorkspace(item)}
                     >
                       Continue prep
                       <ArrowRight size={16} />
@@ -187,10 +236,10 @@ export default function InterviewPrep({
               <ul className="interview-task-list">
                 {incompleteTasks.map((task) => (
                   <li key={task.id}>
-                    <button type="button" onClick={() => onContinuePrep?.(task.appId)}>
+                    <button type="button" onClick={() => openPrepWorkspace(task)}>
                       <strong>{task.label}</strong>
                       <span>
-                        {task.company} · {task.whenLabel}
+                        {task.company} · {task.roundLabel || task.whenLabel}
                       </span>
                     </button>
                   </li>
@@ -211,7 +260,7 @@ export default function InterviewPrep({
               <EmptyState
                 compact
                 title="No practiced questions yet"
-                body="Mark questions as practiced from a company prep workspace, or start with the ready-to-practice list when interviews are active."
+                body="Mark questions as practiced from a prep workspace, or start with the ready-to-practice list when interviews are active."
                 actionLabel="Track opportunities"
                 onAction={() => onNavigate?.('opportunities')}
               />

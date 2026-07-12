@@ -58,13 +58,15 @@ export default function App() {
   const [jobVoiceSummary, setJobVoiceSummary] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [activeNav, setActiveNav] = useState('today');
-  const [opportunityFocus, setOpportunityFocus] = useState(null);
+  const [interviewPrepFocus, setInterviewPrepFocus] = useState(null);
 
-  const handleContinuePrep = (appId) => {
+  const handleContinuePrep = (appId, round = null) => {
     if (appId) {
-      setOpportunityFocus({ appId, tab: 'prep' });
-      setActiveNav('opportunities');
-      return;
+      setInterviewPrepFocus({
+        appId,
+        roundIndex: round?.roundIndex ?? null,
+        roundLabel: round?.roundLabel || null,
+      });
     }
     setActiveNav('interview');
   };
@@ -227,9 +229,6 @@ export default function App() {
                   onSyncToAccount={handleSyncToAccount}
                   syncing={syncing}
                   onCalendarSynced={applySyncedApplications}
-                  focusCompanyId={opportunityFocus?.appId || null}
-                  focusWorkspaceTab={opportunityFocus?.tab || 'prep'}
-                  onFocusConsumed={() => setOpportunityFocus(null)}
                   profile={career.profile}
                   direction={career.direction}
                   onLearningFromReflection={career.addLearningFromReflection}
@@ -250,9 +249,12 @@ export default function App() {
                 applications={applications}
                 profile={career.profile}
                 direction={career.direction}
-                onContinuePrep={handleContinuePrep}
                 onUpdateApplication={updateApplication}
                 onNavigate={setActiveNav}
+                focusAppId={interviewPrepFocus?.appId || null}
+                focusRoundIndex={interviewPrepFocus?.roundIndex ?? null}
+                focusRoundLabel={interviewPrepFocus?.roundLabel || null}
+                onFocusConsumed={() => setInterviewPrepFocus(null)}
               />
             ) : activeNav === 'learning' ? (
               <Learning

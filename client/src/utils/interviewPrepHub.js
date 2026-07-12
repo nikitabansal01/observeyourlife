@@ -122,12 +122,15 @@ export function getUpcomingInterviewCards(applications, profile = null) {
     const inPrepLane = PREP_STATUSES.has(app.status) || app.needsPrep || Boolean(at);
     if (!inPrepLane) continue;
 
-    const { currentLabel } = getProcess(app);
+    const { currentLabel, index: roundIndex } = getProcess(app);
     cards.push({
       id: app.id,
+      appId: app.id,
       company: app.company || 'Unknown company',
       role: app.positionTitle || 'Role TBD',
       stage: currentLabel || STATUS_LABELS[app.status] || app.status,
+      roundLabel: currentLabel || STATUS_LABELS[app.status] || app.status,
+      roundIndex,
       status: app.status,
       at,
       whenLabel: at ? formatInterviewWhen(at) : 'Date TBD',
@@ -156,6 +159,8 @@ export function getIncompletePrepTasks(applications, { limit = 8, profile = null
       tasks.push({
         id: `${app.id}-${item.id}`,
         appId: app.id,
+        roundIndex: card.roundIndex,
+        roundLabel: card.roundLabel,
         label: item.label,
         company: app.company || 'Unknown company',
         whenLabel: card.whenLabel,

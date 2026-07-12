@@ -91,13 +91,15 @@ export function getNextInterview(applications) {
   if (!next) return null;
 
   const { app, at } = next;
-  const { currentLabel } = getProcess(app);
+  const { currentLabel, index: roundIndex } = getProcess(app);
 
   return {
     id: app.id,
     company: app.company || 'Unknown company',
     role: app.positionTitle || 'Role TBD',
     stage: currentLabel || STATUS_LABELS[app.status] || app.status,
+    roundLabel: currentLabel || STATUS_LABELS[app.status] || app.status,
+    roundIndex,
     status: app.status,
     at,
     whenLabel: formatInterviewWhen(at),

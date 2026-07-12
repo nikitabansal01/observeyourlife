@@ -31,7 +31,8 @@ import {
   buildGoogleAuthUrl,
   exchangeCodeForTokens,
   getValidAccessToken,
-  listUpcomingEvents,
+  fetchJobCandidateEvents,
+  filterJobRelatedEvents,
   revokeGoogleToken,
   getClientRedirectBase,
 } from './google.js';
@@ -41,6 +42,7 @@ import {
   deleteGoogleTokens,
   publicGoogleStatus,
 } from './googleStore.js';
+import { buildCalendarSyncPlan, applyCalendarSyncPlan } from './calendarSync.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -66,7 +68,7 @@ app.get('/', (_req, res) => {
       applications: 'GET/POST/PUT/DELETE /api/applications (auth required)',
       labels: 'GET/POST/PUT/DELETE /api/labels (auth required)',
       voiceDump: 'POST /api/voice-dump',
-      google: 'GET /api/google/status | /api/google/connect | /api/google/events | DELETE /api/google/disconnect',
+      google: 'GET /api/google/status | /api/google/connect | POST /api/google/sync | DELETE /api/google/disconnect',
       meta: '/api/meta',
     },
   });
@@ -358,12 +360,68 @@ app.get('/api/google/events', requireAuth, async (req, res) => {
       await writeGoogleTokens(req.user.id, next);
     });
 
-    const events = await listUpcomingEvents(accessToken);
+    const applications = await getUserApplications(req.user.id);
+    const { candidates, queriesRun } = await fetchJobCandidateEvents(accessToken, applications);
+    const events = filterJobRelatedEvents(candidates, applications);
+    candidates.length = 0;
+
     res.json({
       events,
+      matched: events.length,
+      queriesRun,
       window: { daysBack: 7, daysForward: 21 },
+      filter: 'google-q-search-then-local-match',
+      privacy: 'no-full-calendar-list-no-event-storage-no-llm',
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/google/sync', requireAuth, async (req, res) => {
+  try {
+    if (!isGoogleConfigured()) {
+      return res.status(503).json({ error: 'Google Calendar is not configured on this server' });
+    }
+
+    const stored = await readGoogleTokens(req.user.id);
+    if (!stored?.refreshToken && !stored?.accessToken) {
+      return res.status(400).json({ error: 'Connect Google Calendar first' });
+    }
+
+    const accessToken = await getValidAccessToken(stored, async (next) => {
+      await writeGoogleTokens(req.user.id, next);
+    });
+
+    const existing = await getUserApplications(req.user.id);
+    const { candidates, queriesRun } = await fetchJobCandidateEvents(accessToken, existing);
+    const events = filterJobRelatedEvents(candidates, existing);
+    candidates.length = 0;
+
+    const plan = await buildCalendarSyncPlan(events, existing);
+    const { applications, applied, skipped, groups, cleanup, intelligenceMode } = applyCalendarSyncPlan(existing, plan);
+    await saveUserApplications(req.user.id, applications);
+
+    res.json({
+      events,
+      matched: events.length,
+      queriesRun,
+      applied,
+      skipped: skipped || [],
+      groups: groups || [],
+      cleanup: cleanup || [],
+      updatedCount: applied.filter((item) => !item.created && item.kind !== 'cleanup').length,
+      createdCount: applied.filter((item) => item.created).length,
+      cleanupCount: applied.filter((item) => item.kind === 'cleanup').length,
+      skippedCount: (skipped || []).length,
+      classifier: intelligenceMode || (process.env.OPENAI_API_KEY ? 'llm' : 'heuristic'),
+      applications,
+      window: { daysBack: 7, daysForward: 21 },
+      filter: 'google-q-search-then-intelligence',
+      privacy: 'no-full-calendar-list-no-event-storage-intelligence-on-filtered-events-only',
+    });
+  } catch (error) {
+    console.error('Google calendar sync failed:', error);
     res.status(500).json({ error: error.message });
   }
 });

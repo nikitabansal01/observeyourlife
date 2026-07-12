@@ -36,6 +36,7 @@ export default function App() {
     clearExamples,
     resetToExamples,
     syncToAccount,
+    applySyncedApplications,
   } = useApplications();
   const {
     data: lifeDesign,
@@ -132,6 +133,7 @@ export default function App() {
     onResetExamples: resetToExamples,
     onSyncToAccount: handleSyncToAccount,
     syncing,
+    onCalendarSynced: applySyncedApplications,
     onVoiceSubmit: handleJobVoiceSubmit,
     voiceProcessing: jobVoiceProcessing,
     voiceSummary: jobVoiceSummary,

@@ -22,6 +22,7 @@ export default function JobTrackerArea({
   onSyncToAccount,
   syncing,
   nested = false,
+  onCalendarSynced,
 }) {
   const [jobTab, setJobTab] = useState('pipeline');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -38,7 +39,7 @@ export default function JobTrackerArea({
         </header>
       )}
 
-      <GoogleCalendarPanel enabled={isAuthenticated} />
+      <GoogleCalendarPanel enabled={isAuthenticated} onSynced={onCalendarSynced} />
 
       <div className="job-tracker-area__toolbar">
         <div className="job-tracker-area__views" role="tablist" aria-label="Job search views">

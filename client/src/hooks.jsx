@@ -419,6 +419,16 @@ export function useApplications() {
     await loadExamples();
   };
 
+  const applySyncedApplications = (apps) => {
+    if (!Array.isArray(apps)) return;
+    setApplications(apps);
+    setDataSource(isAuthenticated ? 'account' : 'local');
+    if (!isAuthenticated) {
+      saveLocalApplications(apps);
+      setLocalMeta({ dataSource: apps.length ? 'local' : 'empty' });
+    }
+  };
+
   return {
     applications,
     labels,
@@ -434,6 +444,7 @@ export function useApplications() {
     clearExamples,
     resetToExamples,
     syncToAccount,
+    applySyncedApplications,
   };
 }
 

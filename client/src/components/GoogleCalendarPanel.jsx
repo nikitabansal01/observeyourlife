@@ -16,10 +16,13 @@ function formatEventWhen(start) {
   });
 }
 
-export default function GoogleCalendarPanel({ enabled = true }) {
+export default function GoogleCalendarPanel({ enabled = true, onSynced }) {
   const { isAuthenticated, getToken } = useAuth();
   const [status, setStatus] = useState({ configured: false, connected: false });
   const [events, setEvents] = useState([]);
+  const [applied, setApplied] = useState([]);
+  const [skipped, setSkipped] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
@@ -42,20 +45,44 @@ export default function GoogleCalendarPanel({ enabled = true }) {
     }
   };
 
-  const loadEvents = async () => {
+  const syncCalendar = async () => {
     if (!isAuthenticated) return;
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/google/events', {
+      const res = await fetch('/api/google/sync', {
+        method: 'POST',
         headers: await authHeaders(getToken),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Failed to load calendar events');
+      if (!res.ok) throw new Error(data.error || 'Failed to sync calendar');
+
       setEvents(Array.isArray(data.events) ? data.events : []);
+      setApplied(Array.isArray(data.applied) ? data.applied : []);
+      setSkipped(Array.isArray(data.skipped) ? data.skipped : []);
+      setGroups(Array.isArray(data.groups) ? data.groups : []);
+
+      const updated = data.updatedCount || 0;
+      const created = data.createdCount || 0;
+      const skippedCount = data.skippedCount || 0;
+      const mode = data.classifier === 'llm' ? 'LLM' : 'heuristic';
+      if ((data.matched || 0) === 0) {
+        setMessage('No job-related events found (personal calendar not listed).');
+      } else {
+        setMessage(
+          `Intelligence [${mode}]: ${updated} updated, ${created} added, ${skippedCount} skipped across ${(data.groups || []).length} company group${(data.groups || []).length === 1 ? '' : 's'}.`
+        );
+      }
+
+      if (Array.isArray(data.applications) && onSynced) {
+        onSynced(data.applications, data.applied || []);
+      }
     } catch (e) {
       setError(e.message);
       setEvents([]);
+      setApplied([]);
+      setSkipped([]);
+      setGroups([]);
     } finally {
       setLoading(false);
     }
@@ -77,7 +104,7 @@ export default function GoogleCalendarPanel({ enabled = true }) {
     if (!isAuthenticated || !enabled) return;
     (async () => {
       const next = await loadStatus();
-      if (next?.connected) await loadEvents();
+      if (next?.connected) await syncCalendar();
     })();
   }, [isAuthenticated, enabled]);
 
@@ -114,6 +141,9 @@ export default function GoogleCalendarPanel({ enabled = true }) {
       }
       setStatus({ configured: true, connected: false });
       setEvents([]);
+      setApplied([]);
+      setSkipped([]);
+      setGroups([]);
       setMessage('Google Calendar disconnected.');
     } catch (e) {
       setError(e.message);
@@ -129,7 +159,11 @@ export default function GoogleCalendarPanel({ enabled = true }) {
           <Calendar size={16} />
           <h3>Google Calendar</h3>
         </div>
-        <p>Add Google OAuth env vars on the server to enable calendar sync.</p>
+        <p>
+          {error
+            ? `Could not reach the calendar API (${error}). Restart the local server with npm run dev.`
+            : 'Server is running without Google OAuth env vars. Restart npm run dev after saving GOOGLE_CLIENT_ID / SECRET / REDIRECT_URI in .env.'}
+        </p>
       </section>
     );
   }
@@ -145,7 +179,7 @@ export default function GoogleCalendarPanel({ enabled = true }) {
       </div>
 
       <p className="google-cal-panel__hint">
-        Read-only access to upcoming events. Nothing updates your pipeline until you approve it later.
+        After retrieval, an intelligence layer judges relevance, company vs task, existing vs new, and groups multiple events for the same employer before updating your pipeline.
       </p>
 
       <div className="google-cal-panel__actions">
@@ -156,9 +190,9 @@ export default function GoogleCalendarPanel({ enabled = true }) {
           </button>
         ) : (
           <>
-            <button type="button" className="auth-btn" onClick={loadEvents} disabled={loading || busy}>
+            <button type="button" className="auth-btn auth-btn--primary" onClick={syncCalendar} disabled={loading || busy}>
               <RefreshCw size={15} />
-              Refresh events
+              Sync to pipeline
             </button>
             <button type="button" className="auth-btn auth-btn--ghost" onClick={disconnect} disabled={busy}>
               <Unlink size={15} />
@@ -171,18 +205,66 @@ export default function GoogleCalendarPanel({ enabled = true }) {
       {message && <p className="google-cal-panel__msg">{message}</p>}
       {error && <p className="google-cal-panel__error">{error}</p>}
 
+      {status.connected && groups.length > 0 && (
+        <div className="google-cal-panel__groups">
+          <p className="google-cal-panel__empty">Company groups</p>
+          <ul>
+            {groups.slice(0, 12).map((group) => (
+              <li key={`${group.company}-${group.action}`}>
+                <strong>{group.company}</strong>
+                <span>{group.action} · {group.eventCount} event{group.eventCount === 1 ? '' : 's'}</span>
+                {group.reason && <em className="google-cal-panel__match">{group.reason}</em>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {status.connected && applied.length > 0 && (
+        <div className="google-cal-panel__applied">
+          <p className="google-cal-panel__empty">Pipeline changes</p>
+          <ul>
+            {applied.slice(0, 12).map((item) => (
+              <li key={`${item.eventId}-${item.applicationId}`}>
+                <strong>{item.company}</strong>
+                <span>{item.changes.join(', ')}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {status.connected && skipped.length > 0 && (
+        <div className="google-cal-panel__skipped">
+          <p className="google-cal-panel__empty">Skipped (task / not a company)</p>
+          <ul>
+            {skipped.slice(0, 8).map((item) => (
+              <li key={item.eventId}>
+                <strong>{item.eventTitle}</strong>
+                <span>{item.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {status.connected && (
         <div className="google-cal-panel__events">
           {loading ? (
-            <p className="google-cal-panel__empty">Loading events…</p>
+            <p className="google-cal-panel__empty">Syncing calendar…</p>
           ) : events.length === 0 ? (
-            <p className="google-cal-panel__empty">No events in the next 3 weeks.</p>
+            <p className="google-cal-panel__empty">
+              No job-related events in this window.
+            </p>
           ) : (
             <ul>
               {events.slice(0, 12).map((event) => (
                 <li key={event.id}>
                   <strong>{event.title}</strong>
                   <span>{formatEventWhen(event.start)}</span>
+                  {event.matchedCompany && (
+                    <em className="google-cal-panel__match">{event.matchedCompany}</em>
+                  )}
                 </li>
               ))}
             </ul>

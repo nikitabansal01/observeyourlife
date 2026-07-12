@@ -158,18 +158,128 @@ export async function getValidAccessToken(stored, onUpdate) {
   return next.accessToken;
 }
 
-export async function listUpcomingEvents(accessToken, { daysBack = 7, daysForward = 21 } = {}) {
-  const timeMin = new Date();
-  timeMin.setDate(timeMin.getDate() - daysBack);
-  const timeMax = new Date();
-  timeMax.setDate(timeMax.getDate() + daysForward);
+/** Compact Google `q` searches — never list the full primary calendar. */
+const GOOGLE_SEARCH_QUERIES = [
+  'interview',
+  'recruiter',
+  'phone screen',
+  'onsite',
+  'hiring',
+  'coding interview',
+  'technical screen',
+  'superday',
+  'offer call',
+];
 
+const JOB_EVENT_KEYWORDS = [
+  'interview',
+  'recruiter',
+  'phone screen',
+  'phonescreen',
+  'screening call',
+  'hiring manager',
+  'onsite',
+  'on-site',
+  'on site',
+  'superday',
+  'super day',
+  'case interview',
+  'coding interview',
+  'technical screen',
+  'technical interview',
+  'final round',
+  'loop interview',
+  'take-home',
+  'take home',
+  'offer call',
+  'job interview',
+  'hiring',
+];
+
+const EVENT_FIELDS =
+  'items(id,summary,location,start,end,status,htmlLink,hangoutLink,conferenceData/entryPoints/uri)';
+
+function normalizeMatchText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function companyMatchTokens(company) {
+  const cleaned = normalizeMatchText(company)
+    .replace(/\b(inc|incorporated|llc|ltd|corp|corporation|co|company|the)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (cleaned.length < 3) return [];
+  const tokens = [cleaned];
+  const parts = cleaned.split(' ').filter((p) => p.length >= 4);
+  if (parts.length > 1) tokens.push(parts[0]);
+  return tokens;
+}
+
+function trackedCompanies(applications = []) {
+  return (applications || [])
+    .filter((app) => app && !app.isExample && app.company)
+    .filter((app) => !['rejected', 'withdrawn'].includes(app.status))
+    .map((app) => ({
+      id: app.id,
+      company: app.company,
+      tokens: companyMatchTokens(app.company),
+    }))
+    .filter((c) => c.tokens.length > 0)
+    .slice(0, 25);
+}
+
+function buildSearchQueries(applications = []) {
+  const queries = [...GOOGLE_SEARCH_QUERIES];
+  for (const company of trackedCompanies(applications)) {
+    if (!queries.includes(company.company)) queries.push(company.company);
+  }
+  return queries;
+}
+
+function mapRawEvent(event) {
+  return {
+    id: event.id,
+    title: event.summary || '(No title)',
+    location: event.location || '',
+    hangoutLink: event.hangoutLink || event.conferenceData?.entryPoints?.[0]?.uri || '',
+    start: event.start?.dateTime || event.start?.date || null,
+    end: event.end?.dateTime || event.end?.date || null,
+    status: event.status || 'confirmed',
+    htmlLink: event.htmlLink || '',
+  };
+}
+
+/** Public shape only — never includes description/attendees/personal notes. */
+export function toPublicJobEvent(event) {
+  return {
+    id: event.id,
+    title: event.title,
+    location: event.location || '',
+    hangoutLink: event.hangoutLink || '',
+    start: event.start,
+    end: event.end,
+    status: event.status,
+    htmlLink: event.htmlLink || '',
+    matchReason: event.matchReason || null,
+    matchedCompanyId: event.matchedCompanyId || null,
+    matchedCompany: event.matchedCompany || null,
+  };
+}
+
+async function searchEventsByQuery(accessToken, query, timeMin, timeMax) {
   const params = new URLSearchParams({
+    q: query,
     timeMin: timeMin.toISOString(),
     timeMax: timeMax.toISOString(),
     singleEvents: 'true',
     orderBy: 'startTime',
-    maxResults: '50',
+    maxResults: '25',
+    fields: EVENT_FIELDS,
   });
 
   const res = await fetch(`${EVENTS_URL}?${params.toString()}`, {
@@ -178,20 +288,107 @@ export async function listUpcomingEvents(accessToken, { daysBack = 7, daysForwar
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error?.message || data.error || 'Failed to load Google Calendar events');
+    throw new Error(data.error?.message || data.error || `Calendar search failed for “${query}”`);
   }
 
-  return (data.items || []).map((event) => ({
-    id: event.id,
-    title: event.summary || '(No title)',
-    description: event.description || '',
-    location: event.location || '',
-    hangoutLink: event.hangoutLink || event.conferenceData?.entryPoints?.[0]?.uri || '',
-    start: event.start?.dateTime || event.start?.date || null,
-    end: event.end?.dateTime || event.end?.date || null,
-    status: event.status || 'confirmed',
-    htmlLink: event.htmlLink || '',
-  }));
+  return (data.items || []).map(mapRawEvent);
+}
+
+/**
+ * Fetch only job-candidate events via Google search (`q`).
+ * Does not list or retain the full primary calendar.
+ */
+export async function fetchJobCandidateEvents(accessToken, applications = [], {
+  daysBack = 7,
+  daysForward = 21,
+} = {}) {
+  const timeMin = new Date();
+  timeMin.setDate(timeMin.getDate() - daysBack);
+  const timeMax = new Date();
+  timeMax.setDate(timeMax.getDate() + daysForward);
+
+  const queries = buildSearchQueries(applications);
+  const byId = new Map();
+
+  // Sequential to keep quota gentle; results are tiny vs a full dump.
+  for (const query of queries) {
+    const batch = await searchEventsByQuery(accessToken, query, timeMin, timeMax);
+    for (const event of batch) {
+      if (event?.id) byId.set(event.id, event);
+    }
+  }
+
+  return {
+    candidates: [...byId.values()].sort((a, b) => String(a.start).localeCompare(String(b.start))),
+    queriesRun: queries.length,
+  };
+}
+
+/**
+ * Second pass: keep only events that still look job-related / company-matched.
+ * Drop everything else immediately — do not store, log, or return them.
+ */
+export function filterJobRelatedEvents(events, applications = []) {
+  const companies = trackedCompanies(applications);
+  const matched = [];
+
+  for (const event of events || []) {
+    const haystack = normalizeMatchText([event.title, event.location].filter(Boolean).join(' '));
+    if (!haystack) continue;
+
+    const keyword = JOB_EVENT_KEYWORDS.find((k) => haystack.includes(normalizeMatchText(k)));
+    if (keyword) {
+      matched.push({
+        ...event,
+        matchReason: `keyword:${keyword}`,
+        matchedCompanyId: null,
+        matchedCompany: null,
+      });
+      continue;
+    }
+
+    const companyHit = companies.find((c) =>
+      c.tokens.some((token) => {
+        if (token.length >= 5) return haystack.includes(token);
+        return (
+          haystack === token
+          || haystack.startsWith(`${token} `)
+          || haystack.endsWith(` ${token}`)
+          || haystack.includes(` ${token} `)
+        );
+      })
+    );
+
+    if (companyHit) {
+      matched.push({
+        ...event,
+        matchReason: `company:${companyHit.company}`,
+        matchedCompanyId: companyHit.id,
+        matchedCompany: companyHit.company,
+      });
+    }
+  }
+
+  return matched.map(toPublicJobEvent);
+}
+
+/**
+ * Guard for future AI features: never pass raw calendar dumps to an LLM.
+ * Only already-filtered public job events may be used.
+ */
+export function assertSafeCalendarContextForLlm(events) {
+  if (!Array.isArray(events)) {
+    throw new Error('Calendar LLM context must be a filtered events array');
+  }
+  for (const event of events) {
+    if (event?.description != null || event?.attendees != null || event?.raw != null) {
+      throw new Error('Refusing to send non-public calendar fields to an LLM');
+    }
+    if (!event?.matchReason) {
+      throw new Error('Refusing to send unmatched calendar events to an LLM');
+    }
+  }
+  return events;
 }
 
 export async function revokeGoogleToken(token) {

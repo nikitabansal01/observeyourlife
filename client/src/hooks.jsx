@@ -14,6 +14,10 @@ import {
   mergeApplications,
   getCareerProfile,
   saveCareerProfile,
+  getLocalCareerOs,
+  applyCareerOsPayload,
+  registerCareerOsCloudSync,
+  pauseCareerOsCloudSync,
 } from './storage';
 import { isClerkConfigured } from './clerk';
 import {
@@ -97,6 +101,16 @@ export function useApplications() {
 
   const isStorageError = (message = '') => /postgres|database|storage|cloud accounts/i.test(message);
 
+  const readApiError = async (res, fallback) => {
+    const data = await res.json().catch(() => ({}));
+    if (data?.error) return data.error;
+    // Vite proxy returns 5xx HTML/empty when the API is down
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      return 'API server is offline. Restart it (npm run server), then refresh.';
+    }
+    return fallback;
+  };
+
   const syncToAccount = useCallback(async (apps) => {
     if (!isAuthenticated || !getToken) return null;
 
@@ -104,30 +118,74 @@ export function useApplications() {
     if (!token) throw new Error('Sign-in session expired. Sign out and sign in again.');
 
     const localLabels = getLocalLabels() || [];
-    const res = await fetch(`${API}/auth/sync`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        localApplications: stripExamples(apps),
-        localLabels,
-      }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to sync to your account');
+    const localCareerOs = getLocalCareerOs();
+    let res;
+    try {
+      res = await fetch(`${API}/auth/sync`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          localApplications: stripExamples(apps),
+          localLabels,
+          localCareerOs,
+        }),
+      });
+    } catch {
+      throw new Error('API server is offline. Restart it (npm run server), then refresh.');
     }
 
+    if (!res.ok) {
+      throw new Error(await readApiError(res, 'Failed to sync to your account'));
+    }
+
+    const data = await res.json().catch(() => ({}));
     clearLocalData();
     setLocalMeta({ dataSource: 'account' });
     setApplications(data.applications);
     setLabels(Array.isArray(data.labels) ? data.labels : []);
     setDataSource('account');
+    if (data.careerOs) {
+      pauseCareerOsCloudSync(true);
+      applyCareerOsPayload(data.careerOs);
+      pauseCareerOsCloudSync(false);
+    }
     return data.applications;
   }, [isAuthenticated, getToken]);
+
+  const pushCareerOs = useCallback(async (payload) => {
+    if (!isAuthenticated || !getToken) return null;
+    const token = await getToken();
+    if (!token) return null;
+    const res = await fetch(`${API}/career-os`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload || getLocalCareerOs()),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to save career data');
+    }
+    return res.json();
+  }, [isAuthenticated, getToken]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      registerCareerOsCloudSync(null);
+      return undefined;
+    }
+    registerCareerOsCloudSync((payload) => {
+      pushCareerOs(payload).catch((error) => {
+        console.warn('Career OS cloud sync failed:', error.message);
+      });
+    });
+    return () => registerCareerOsCloudSync(null);
+  }, [isAuthenticated, pushCareerOs]);
 
   const refresh = useCallback(async () => {
     if (authLoading) return;
@@ -142,41 +200,63 @@ export function useApplications() {
         const local = getLocalApplications();
         const toMigrate = local ? stripExamples(local) : [];
         const localLabels = getLocalLabels() || [];
+        const localCareerOs = getLocalCareerOs();
+        const hasCareerOsLocal = Boolean(
+          localCareerOs.profile
+          || localCareerOs.storyBank
+          || Object.keys(localCareerOs.roadmapProgress || {}).length
+          || (localCareerOs.practicedQuestions || []).length
+          || Object.keys(localCareerOs.learningPlanStatuses || {}).length
+        );
 
-        if (toMigrate.length > 0 || localLabels.length > 0) {
-          const syncRes = await fetch(`${API}/auth/sync`, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              localApplications: toMigrate,
-              localLabels,
-            }),
-          });
+        if (toMigrate.length > 0 || localLabels.length > 0 || hasCareerOsLocal) {
+          let syncRes;
+          try {
+            syncRes = await fetch(`${API}/auth/sync`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                localApplications: toMigrate,
+                localLabels,
+                localCareerOs,
+              }),
+            });
+          } catch {
+            throw new Error('API server is offline. Restart it (npm run server), then refresh.');
+          }
           if (!syncRes.ok) {
-            const data = await syncRes.json().catch(() => ({}));
-            if (isStorageError(data.error)) {
+            const message = await readApiError(syncRes, 'Failed to sync local data to your account');
+            if (isStorageError(message)) {
               const fallback = loadLocalRealApps();
               if (fallback) {
                 setError('Database unavailable — showing browser-saved data.');
                 return fallback;
               }
             }
-            throw new Error(data.error || 'Failed to sync local data to your account');
+            throw new Error(message);
           }
           const syncData = await syncRes.json().catch(() => ({}));
           clearLocalData();
           setLocalMeta({ dataSource: 'account' });
           if (Array.isArray(syncData.labels)) setLabels(syncData.labels);
+          if (syncData.careerOs) {
+            pauseCareerOsCloudSync(true);
+            applyCareerOsPayload(syncData.careerOs);
+            pauseCareerOsCloudSync(false);
+          }
         }
 
-        const [appsRes, labelsRes] = await Promise.all([
+        const [appsRes, labelsRes, careerOsRes] = await Promise.all([
           fetch(`${API}/applications`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
           fetch(`${API}/labels`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API}/career-os`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
         ]);
@@ -197,6 +277,14 @@ export function useApplications() {
         if (labelsRes.ok) {
           const labelsData = await labelsRes.json();
           setLabels(Array.isArray(labelsData) ? labelsData : []);
+        }
+        if (careerOsRes.ok) {
+          const careerOs = await careerOsRes.json().catch(() => null);
+          if (careerOs) {
+            pauseCareerOsCloudSync(true);
+            applyCareerOsPayload(careerOs);
+            pauseCareerOsCloudSync(false);
+          }
         }
 
         const remainingLocal = getLocalApplications();
@@ -486,6 +574,12 @@ export function useCareerProfile() {
     setProfile(latest);
     return latest;
   }, []);
+
+  useEffect(() => {
+    const onSync = () => refreshProfile();
+    window.addEventListener('career-os-synced', onSync);
+    return () => window.removeEventListener('career-os-synced', onSync);
+  }, [refreshProfile]);
 
   const importResume = useCallback((payload) => {
     return commit(applyResumeImport(getCareerProfile(), payload));

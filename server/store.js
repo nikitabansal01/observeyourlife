@@ -66,6 +66,10 @@ async function ensureSchema() {
     ALTER TABLE user_applications
     ADD COLUMN IF NOT EXISTS labels JSONB NOT NULL DEFAULT '[]'::jsonb
   `;
+  await sql`
+    ALTER TABLE user_applications
+    ADD COLUMN IF NOT EXISTS career_os JSONB NOT NULL DEFAULT '{}'::jsonb
+  `;
   schemaReady = true;
 }
 
@@ -82,6 +86,19 @@ function parseJsonArray(raw) {
   return Array.isArray(raw) ? raw : [];
 }
 
+function parseJsonObject(raw) {
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return raw && typeof raw === 'object' ? raw : null;
+}
+
 async function readFilesystemUserData(userId) {
   const userDir = join(USERS_DATA_DIR, userId);
   await mkdir(userDir, { recursive: true });
@@ -92,19 +109,20 @@ async function readFilesystemUserData(userId) {
     return {
       applications: Array.isArray(data.applications) ? data.applications : [],
       labels: Array.isArray(data.labels) ? data.labels : [],
+      careerOs: data.careerOs && typeof data.careerOs === 'object' ? data.careerOs : null,
     };
   } catch {
-    return { applications: [], labels: [] };
+    return { applications: [], labels: [], careerOs: null };
   }
 }
 
-async function writeFilesystemUserData(userId, { applications, labels }) {
+async function writeFilesystemUserData(userId, { applications, labels, careerOs }) {
   const userDir = join(USERS_DATA_DIR, userId);
   await mkdir(userDir, { recursive: true });
   const dbPath = join(userDir, 'db.json');
   await writeFile(
     dbPath,
-    JSON.stringify({ applications, labels }, null, 2)
+    JSON.stringify({ applications, labels, careerOs: careerOs ?? null }, null, 2)
   );
 }
 
@@ -158,6 +176,7 @@ export async function writeUserApplications(userId, applications) {
   await writeFilesystemUserData(userId, {
     applications,
     labels: existing.labels,
+    careerOs: existing.careerOs,
   });
 }
 
@@ -208,5 +227,57 @@ export async function writeUserLabels(userId, labels) {
   await writeFilesystemUserData(userId, {
     applications: existing.applications,
     labels,
+    careerOs: existing.careerOs,
+  });
+}
+
+export async function readUserCareerOs(userId) {
+  assertStorageReady();
+
+  if (usePostgresStorage()) {
+    await ensureSchema();
+    const sql = getSql();
+    const rows = await sql`
+      SELECT career_os
+      FROM user_applications
+      WHERE user_id = ${userId}
+      LIMIT 1
+    `;
+    return parseJsonObject(rows[0]?.career_os);
+  }
+
+  const data = await readFilesystemUserData(userId);
+  return data.careerOs;
+}
+
+export async function writeUserCareerOs(userId, careerOs) {
+  assertStorageReady();
+  const payload = JSON.stringify(careerOs || {});
+
+  if (usePostgresStorage()) {
+    await ensureSchema();
+    const sql = getSql();
+
+    try {
+      await sql`
+        INSERT INTO user_applications (user_id, applications, labels, career_os, updated_at)
+        VALUES (${userId}, '[]'::jsonb, '[]'::jsonb, ${payload}::jsonb, NOW())
+        ON CONFLICT (user_id)
+        DO UPDATE SET
+          career_os = EXCLUDED.career_os,
+          updated_at = NOW()
+      `;
+    } catch (error) {
+      console.error('Neon career OS write failed:', error.message, { userId });
+      throw new Error(`Failed to save career data: ${error.message}`);
+    }
+    return;
+  }
+
+  const existing = await readFilesystemUserData(userId);
+  await writeFilesystemUserData(userId, {
+    applications: existing.applications,
+    labels: existing.labels,
+    careerOs,
   });
 }

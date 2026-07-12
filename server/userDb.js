@@ -7,8 +7,11 @@ import {
   writeUserApplications,
   readUserLabels,
   writeUserLabels,
+  readUserCareerOs,
+  writeUserCareerOs,
 } from './store.js';
 import { DEFAULT_LABEL_NAME } from './constants.js';
+import { mergeCareerOs, normalizeCareerOs } from './careerOs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -136,6 +139,27 @@ export async function deleteUserLabel(userId, labelId) {
   }));
   await saveUserApplications(userId, nextApps);
   return true;
+}
+
+export async function getUserCareerOs(userId) {
+  const raw = await readUserCareerOs(userId);
+  return normalizeCareerOs(raw);
+}
+
+export async function saveUserCareerOs(userId, careerOs) {
+  const normalized = normalizeCareerOs({
+    ...careerOs,
+    updatedAt: new Date().toISOString(),
+  });
+  await writeUserCareerOs(userId, normalized);
+  return normalized;
+}
+
+export async function migrateUserCareerOs(userId, localCareerOs) {
+  const existing = await getUserCareerOs(userId);
+  const merged = mergeCareerOs(existing, localCareerOs);
+  await writeUserCareerOs(userId, merged);
+  return merged;
 }
 
 export async function loadExampleData() {

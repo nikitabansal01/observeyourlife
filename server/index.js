@@ -18,6 +18,9 @@ import {
   createUserLabel,
   updateUserLabel,
   deleteUserLabel,
+  getUserCareerOs,
+  saveUserCareerOs,
+  migrateUserCareerOs,
 } from './userDb.js';
 import { optionalAuth, requireAuth } from './middleware.js';
 import { parseVoiceDump, applyVoiceDumpResult } from './parser.js';
@@ -79,6 +82,7 @@ app.get('/', (_req, res) => {
       auth: 'POST /api/auth/sync | GET /api/auth/me',
       applications: 'GET/POST/PUT/DELETE /api/applications (auth required)',
       labels: 'GET/POST/PUT/DELETE /api/labels (auth required)',
+      careerOs: 'GET/PUT /api/career-os (auth required)',
       voiceDump: 'POST /api/voice-dump',
       careerRecommend: 'POST /api/career/recommend',
       careerParseResume: 'POST /api/career/parse-resume',
@@ -127,9 +131,10 @@ app.get('/api/legacy/import', async (_req, res) => {
 
 app.post('/api/auth/sync', requireAuth, async (req, res) => {
   try {
-    const { localApplications, localLabels } = req.body;
+    const { localApplications, localLabels, localCareerOs } = req.body;
     let applications;
     let labels;
+    let careerOs;
 
     if (Array.isArray(localApplications) && localApplications.length > 0) {
       applications = await migrateUserApplications(req.user.id, localApplications);
@@ -143,7 +148,13 @@ app.post('/api/auth/sync', requireAuth, async (req, res) => {
       labels = await getUserLabels(req.user.id);
     }
 
-    res.json({ user: req.user, applications, labels });
+    if (localCareerOs && typeof localCareerOs === 'object') {
+      careerOs = await migrateUserCareerOs(req.user.id, localCareerOs);
+    } else {
+      careerOs = await getUserCareerOs(req.user.id);
+    }
+
+    res.json({ user: req.user, applications, labels, careerOs });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -152,7 +163,8 @@ app.post('/api/auth/sync', requireAuth, async (req, res) => {
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   const applications = await getUserApplications(req.user.id);
   const labels = await getUserLabels(req.user.id);
-  res.json({ user: req.user, applications, labels });
+  const careerOs = await getUserCareerOs(req.user.id);
+  res.json({ user: req.user, applications, labels, careerOs });
 });
 
 app.get('/api/applications', requireAuth, async (req, res) => {
@@ -205,6 +217,24 @@ app.get('/api/labels', requireAuth, async (req, res) => {
   try {
     const labels = await getUserLabels(req.user.id);
     res.json(labels);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/career-os', requireAuth, async (req, res) => {
+  try {
+    const careerOs = await getUserCareerOs(req.user.id);
+    res.json(careerOs);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/career-os', requireAuth, async (req, res) => {
+  try {
+    const careerOs = await saveUserCareerOs(req.user.id, req.body || {});
+    res.json(careerOs);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

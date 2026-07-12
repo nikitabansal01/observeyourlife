@@ -33,7 +33,6 @@ import {
   groupStoriesByCompetency,
   normalizeStoryBank,
   removeStoryFromBank,
-  seedStoriesForPath,
   starCompleteness,
   upsertStoryInBank,
 } from '../utils/storyBank';
@@ -323,21 +322,18 @@ function StoryEditor({ story, onChange, onDelete }) {
   );
 }
 
-function StoriesTab({ profile, direction }) {
-  const [bank, setBank] = useState(() => {
-    const raw = getStoryBank();
-    const existing = normalizeStoryBank(raw);
-    if (existing.stories.length > 0) {
-      if (!raw?.stories) saveStoryBank(existing);
-      return existing;
-    }
-    const seeded = seedStoriesForPath(profile || direction, []);
-    const next = { version: 2, stories: seeded };
-    saveStoryBank(next);
-    return next;
-  });
+function StoriesTab() {
+  const [bank, setBank] = useState(() => normalizeStoryBank(getStoryBank()));
   const [filter, setFilter] = useState('all');
   const [selectedId, setSelectedId] = useState(null);
+
+  useEffect(() => {
+    const onSync = () => {
+      setBank(normalizeStoryBank(getStoryBank()));
+    };
+    window.addEventListener('career-os-synced', onSync);
+    return () => window.removeEventListener('career-os-synced', onSync);
+  }, []);
 
   const stories = bank.stories;
 
@@ -490,6 +486,12 @@ export default function Learning({ profile = null, direction: directionProp, onN
     setLearningTab(tab);
   }, [tab]);
 
+  useEffect(() => {
+    const onSync = () => setRoadmapProgress(getLearningRoadmapProgress());
+    window.addEventListener('career-os-synced', onSync);
+    return () => window.removeEventListener('career-os-synced', onSync);
+  }, []);
+
   const setItemStatus = (itemFullId, status) => {
     const next = setRoadmapItemStatus(roadmapProgress, roadmap.pathId, itemFullId, status);
     setRoadmapProgress(next);
@@ -528,7 +530,7 @@ export default function Learning({ profile = null, direction: directionProp, onN
             onNavigate={onNavigate}
           />
         ) : (
-          <StoriesTab profile={profile} direction={direction} />
+          <StoriesTab />
         )}
       </div>
     </section>

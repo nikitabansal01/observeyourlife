@@ -135,6 +135,7 @@ export function saveCareerProfile(profile) {
   if (normalized.selection?.primaryTitle) {
     localStorage.setItem(DIRECTION_KEY, JSON.stringify(normalized.selection));
   }
+  scheduleCareerOsCloudSync();
   return normalized;
 }
 
@@ -165,6 +166,7 @@ export function getStoryBank() {
 
 export function saveStoryBank(bank) {
   localStorage.setItem(STORY_BANK_KEY, JSON.stringify(bank));
+  scheduleCareerOsCloudSync();
 }
 
 export function getLearningRoadmapProgress() {
@@ -180,6 +182,7 @@ export function getLearningRoadmapProgress() {
 
 export function saveLearningRoadmapProgress(progress) {
   localStorage.setItem(LEARNING_ROADMAP_KEY, JSON.stringify(progress || {}));
+  scheduleCareerOsCloudSync();
 }
 
 export function getLearningTab() {
@@ -214,6 +217,7 @@ export function getPracticedQuestions() {
 
 export function savePracticedQuestions(questions) {
   localStorage.setItem(PRACTICED_QUESTIONS_KEY, JSON.stringify(questions));
+  scheduleCareerOsCloudSync();
 }
 
 export function getLearningPlanStatuses() {
@@ -229,6 +233,84 @@ export function getLearningPlanStatuses() {
 
 export function saveLearningPlanStatuses(statuses) {
   localStorage.setItem(LEARNING_PLAN_KEY, JSON.stringify(statuses));
+  scheduleCareerOsCloudSync();
+}
+
+/** Snapshot of all career OS local data for cloud sync. */
+export function getLocalCareerOs() {
+  const profile = getCareerProfile();
+  const emptyProfile = !profile?.updatedAt
+    && !profile?.selection?.primaryPathId
+    && !profile?.resume?.importedAt
+    && !Object.values(profile?.snapshot || {}).some((v) => String(v || '').trim());
+
+  return {
+    profile: emptyProfile ? null : profile,
+    storyBank: getStoryBank(),
+    roadmapProgress: getLearningRoadmapProgress(),
+    practicedQuestions: getPracticedQuestions(),
+    learningPlanStatuses: getLearningPlanStatuses(),
+    updatedAt: profile?.updatedAt || new Date().toISOString(),
+  };
+}
+
+/** Apply cloud career OS payload into localStorage and notify listeners. */
+export function applyCareerOsPayload(payload) {
+  if (!payload || typeof payload !== 'object') return;
+
+  if (payload.profile) {
+    const normalized = normalizeCareerProfile(payload.profile);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(normalized));
+    if (normalized.selection?.primaryTitle) {
+      localStorage.setItem(DIRECTION_KEY, JSON.stringify(normalized.selection));
+    }
+  }
+
+  if (payload.storyBank != null) {
+    localStorage.setItem(STORY_BANK_KEY, JSON.stringify(payload.storyBank));
+  }
+
+  if (payload.roadmapProgress && typeof payload.roadmapProgress === 'object') {
+    localStorage.setItem(LEARNING_ROADMAP_KEY, JSON.stringify(payload.roadmapProgress));
+  }
+
+  if (Array.isArray(payload.practicedQuestions)) {
+    localStorage.setItem(PRACTICED_QUESTIONS_KEY, JSON.stringify(payload.practicedQuestions));
+  }
+
+  if (payload.learningPlanStatuses && typeof payload.learningPlanStatuses === 'object') {
+    localStorage.setItem(LEARNING_PLAN_KEY, JSON.stringify(payload.learningPlanStatuses));
+  }
+
+  try {
+    window.dispatchEvent(new CustomEvent('career-os-synced', { detail: payload }));
+  } catch {
+    // ignore
+  }
+}
+
+let careerOsCloudSyncFn = null;
+let careerOsCloudSyncTimer = null;
+let careerOsCloudSyncPaused = false;
+
+export function registerCareerOsCloudSync(fn) {
+  careerOsCloudSyncFn = typeof fn === 'function' ? fn : null;
+}
+
+export function pauseCareerOsCloudSync(paused = true) {
+  careerOsCloudSyncPaused = Boolean(paused);
+}
+
+function scheduleCareerOsCloudSync() {
+  if (!careerOsCloudSyncFn || careerOsCloudSyncPaused) return;
+  clearTimeout(careerOsCloudSyncTimer);
+  careerOsCloudSyncTimer = setTimeout(() => {
+    try {
+      careerOsCloudSyncFn?.(getLocalCareerOs());
+    } catch (error) {
+      console.warn('Career OS cloud sync failed:', error.message);
+    }
+  }, 500);
 }
 
 export function mergeApplications(existing, incoming) {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
+  ArrowRight,
   CalendarClock,
   CheckSquare,
   ClipboardList,
@@ -59,6 +60,7 @@ export default function InterviewPrepWorkspace({
   profile = null,
   direction = null,
   initialSection = 'overview',
+  onOpenCompanyMock,
 }) {
   const [section, setSection] = useState(initialSection);
   const accent = STATUS_COLORS[app.status] || 'var(--accent-cyan)';
@@ -194,6 +196,29 @@ export default function InterviewPrepWorkspace({
                 </ul>
               </article>
             </div>
+          </div>
+        ) : section === 'mock' ? (
+          <div className="workspace-panel">
+            <article className="workspace-card">
+              <div className="workspace-card__header">
+                <Mic size={18} />
+                <div>
+                  <h3>Mock interview</h3>
+                  <p>
+                    Practice lives on the company workspace for {overview.company}, grounded in
+                    this role’s JD, personnel, and prep notes.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="submit-btn"
+                onClick={() => onOpenCompanyMock?.(app.id)}
+              >
+                Open mock interview
+                <ArrowRight size={16} />
+              </button>
+            </article>
           </div>
         ) : (
           <div className="workspace-panel">

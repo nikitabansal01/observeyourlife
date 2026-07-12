@@ -53,6 +53,7 @@ import {
 import { recommendCareerRoutes } from './careerIntelligence.js';
 import { parseCareerResume } from './resumeParse.js';
 import { extractResumeTextFromFile, RESUME_UPLOAD_ACCEPT } from './resumeExtract.js';
+import { runMockInterviewTurn, generateStudyPlan } from './mockInterview.js';
 import multer from 'multer';
 
 const app = express();
@@ -86,6 +87,7 @@ app.get('/', (_req, res) => {
       voiceDump: 'POST /api/voice-dump',
       careerRecommend: 'POST /api/career/recommend',
       careerParseResume: 'POST /api/career/parse-resume',
+      mockInterview: 'POST /api/mock-interview/turn | POST /api/mock-interview/plan',
       google: 'GET /api/google/status | /api/google/connect | POST /api/google/preview | POST /api/google/apply | DELETE /api/google/disconnect',
       meta: '/api/meta',
     },
@@ -343,6 +345,62 @@ app.post('/api/career/recommend', optionalAuth, async (req, res) => {
   } catch (error) {
     console.error('Career recommend failed:', error);
     res.status(500).json({ error: error.message || 'Failed to recommend career routes' });
+  }
+});
+
+app.post('/api/mock-interview/turn', optionalAuth, async (req, res) => {
+  try {
+    const { applicationContext, profileSnapshot, session, userMessage } = req.body || {};
+    if (!applicationContext || typeof applicationContext !== 'object') {
+      return res.status(400).json({ error: 'applicationContext is required' });
+    }
+    if (!session || typeof session !== 'object') {
+      return res.status(400).json({ error: 'session is required' });
+    }
+
+    const result = await runMockInterviewTurn({
+      applicationContext,
+      profileSnapshot: profileSnapshot || {},
+      session,
+      userMessage: userMessage || null,
+    });
+
+    res.json({
+      assistantMessages: result.assistantMessages,
+      sessionPatch: result.sessionPatch,
+      feedback: result.feedback,
+      done: Boolean(result.done),
+      drillQuestions: result.drillQuestions || [],
+      mode: result.mode,
+      aiEnabled: Boolean(process.env.OPENAI_API_KEY),
+    });
+  } catch (error) {
+    console.error('Mock interview turn failed:', error);
+    res.status(500).json({ error: error.message || 'Failed to run mock interview turn' });
+  }
+});
+
+app.post('/api/mock-interview/plan', optionalAuth, async (req, res) => {
+  try {
+    const { applicationContext, checklistGaps, interviewAt } = req.body || {};
+    if (!applicationContext || typeof applicationContext !== 'object') {
+      return res.status(400).json({ error: 'applicationContext is required' });
+    }
+
+    const studyPlan = await generateStudyPlan({
+      applicationContext,
+      checklistGaps: checklistGaps || [],
+      interviewAt: interviewAt || applicationContext.interviewAt || null,
+    });
+
+    res.json({
+      studyPlan,
+      mode: process.env.OPENAI_API_KEY ? 'openai' : 'heuristic',
+      aiEnabled: Boolean(process.env.OPENAI_API_KEY),
+    });
+  } catch (error) {
+    console.error('Study plan failed:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate study plan' });
   }
 });
 

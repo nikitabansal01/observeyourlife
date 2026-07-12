@@ -3,8 +3,10 @@ import {
   ArrowLeft,
   Building2,
   Briefcase,
+  CalendarRange,
   ClipboardList,
   Compass,
+  Mic,
   NotebookPen,
   Search,
 } from 'lucide-react';
@@ -19,12 +21,16 @@ import {
   getRoleFitDefaults,
   getWorkspace,
 } from '../utils/companyWorkspace';
+import MockInterviewChat from './MockInterviewChat';
+import StudyPlanPanel from './StudyPlanPanel';
 
 const TABS = [
   { id: 'overview', label: 'Overview', shortLabel: 'Overview', icon: Building2 },
   { id: 'research', label: 'Company Research', shortLabel: 'Research', icon: Search },
   { id: 'fit', label: 'Role Fit', shortLabel: 'Fit', icon: Compass },
   { id: 'notes', label: 'Notes and Reflection', shortLabel: 'Notes', icon: NotebookPen },
+  { id: 'plan', label: 'Planning', shortLabel: 'Plan', icon: CalendarRange },
+  { id: 'mock', label: 'Mock Interview', shortLabel: 'Mock', icon: Mic },
 ];
 
 function ListEditor({ items, onChange, placeholder }) {
@@ -82,7 +88,12 @@ export default function CompanyWorkspace({
   direction = null,
   onLearningFromReflection,
 }) {
-  const [tab, setTab] = useState(initialTab === 'prep' ? 'overview' : initialTab);
+  const resolveTab = (value) => {
+    if (value === 'prep') return 'overview';
+    if (TABS.some((t) => t.id === value)) return value;
+    return 'overview';
+  };
+  const [tab, setTab] = useState(() => resolveTab(initialTab));
 
   const accent = STATUS_COLORS[app.status] || '#8B5CF6';
   const { steps, index, currentLabel } = getProcess(app);
@@ -94,7 +105,7 @@ export default function CompanyWorkspace({
   const pathTitle = direction?.primaryTitle || roleFit.pathTitle;
 
   useEffect(() => {
-    setTab(initialTab === 'prep' ? 'overview' : initialTab);
+    setTab(resolveTab(initialTab));
   }, [app.id, initialTab]);
 
   const patchWorkspace = (partial, extra = {}) => {
@@ -488,6 +499,19 @@ export default function CompanyWorkspace({
               </div>
             </article>
           </div>
+        )}
+
+        {tab === 'mock' && (
+          <MockInterviewChat app={app} profile={profile} onUpdate={onUpdate} />
+        )}
+
+        {tab === 'plan' && (
+          <StudyPlanPanel
+            app={app}
+            profile={profile}
+            onUpdate={onUpdate}
+            onOpenMock={() => setTab('mock')}
+          />
         )}
       </div>
     </section>

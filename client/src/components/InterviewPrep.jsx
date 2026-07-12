@@ -28,6 +28,7 @@ export default function InterviewPrep({
   direction: directionProp,
   onUpdateApplication,
   onNavigate,
+  onOpenCompanyWorkspace,
   focusAppId = null,
   focusRoundIndex = null,
   focusRoundLabel = null,
@@ -125,6 +126,7 @@ export default function InterviewPrep({
         onBack={() => setSelectedPrep(null)}
         profile={profile}
         direction={direction}
+        onOpenCompanyMock={(appId) => onOpenCompanyWorkspace?.(appId, 'mock')}
       />
     );
   }

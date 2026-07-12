@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
 import { Mic, Square, Loader2, Sparkles, Send } from 'lucide-react';
+import useSpeechToText from '../hooks/useSpeechToText';
 
 const AREA_PLACEHOLDERS = {
   jobs: 'Interviews, applications, status changes — type or tap the mic',
@@ -11,79 +11,21 @@ const AREA_PLACEHOLDERS = {
   overview: 'How life feels right now — type or tap the mic',
 };
 
-function combineText(transcript, interim) {
-  if (!interim) return transcript;
-  if (!transcript) return interim;
-  return `${transcript} ${interim}`;
-}
-
 export default function VoiceDump({ onSubmit, processing, currentArea = 'overview' }) {
-  const [listening, setListening] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const [interim, setInterim] = useState('');
-  const recognitionRef = useRef(null);
-  const supported = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+  const speech = useSpeechToText();
   const areaPlaceholder = AREA_PLACEHOLDERS[currentArea] || AREA_PLACEHOLDERS.overview;
 
-  useEffect(() => {
-    if (!supported) return;
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onresult = (event) => {
-      let finalText = '';
-      let interimText = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const text = event.results[i][0].transcript;
-        if (event.results[i].isFinal) finalText += text;
-        else interimText += text;
-      }
-
-      if (finalText) {
-        setTranscript((prev) => combineText(prev, finalText));
-      }
-      setInterim(interimText);
-    };
-
-    recognition.onerror = () => setListening(false);
-    recognition.onend = () => setListening(false);
-    recognitionRef.current = recognition;
-
-    return () => recognition.stop();
-  }, [supported]);
-
-  const toggleListening = () => {
-    if (!supported || processing) return;
-
-    if (listening) {
-      recognitionRef.current?.stop();
-      setListening(false);
-      setInterim('');
-    } else {
-      recognitionRef.current?.start();
-      setListening(true);
-    }
-  };
-
   const handleSubmit = async () => {
-    const text = combineText(transcript, interim).trim();
+    const text = speech.displayText.trim();
     if (!text || processing) return;
-    if (listening) recognitionRef.current?.stop();
-    setListening(false);
-    setInterim('');
+    if (speech.listening) speech.stop();
     await onSubmit(text);
-    setTranscript('');
+    speech.reset();
   };
 
-  const displayText = combineText(transcript, interim);
-  const placeholder = listening
+  const placeholder = speech.listening
     ? 'Listening… keep talking'
-    : supported
+    : speech.supported
       ? areaPlaceholder
       : 'Type your update (voice needs Chrome or Safari)';
 
@@ -94,15 +36,12 @@ export default function VoiceDump({ onSubmit, processing, currentArea = 'overvie
         <h2>Voice update</h2>
       </div>
 
-      <div className={`voice-compose ${listening ? 'voice-compose--live' : ''}`}>
+      <div className={`voice-compose ${speech.listening ? 'voice-compose--live' : ''}`}>
         <textarea
           className="voice-compose__input"
           placeholder={placeholder}
-          value={displayText}
-          onChange={(e) => {
-            setTranscript(e.target.value);
-            setInterim('');
-          }}
+          value={speech.displayText}
+          onChange={(e) => speech.setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
               e.preventDefault();
@@ -115,16 +54,16 @@ export default function VoiceDump({ onSubmit, processing, currentArea = 'overvie
         />
 
         <div className="voice-compose__actions">
-          {supported && (
+          {speech.supported && (
             <button
               type="button"
-              className={`voice-compose__mic ${listening ? 'voice-compose__mic--active' : ''}`}
-              onClick={toggleListening}
+              className={`voice-compose__mic ${speech.listening ? 'voice-compose__mic--active' : ''}`}
+              onClick={speech.toggle}
               disabled={processing}
-              aria-label={listening ? 'Stop recording' : 'Start recording'}
-              aria-pressed={listening}
+              aria-label={speech.listening ? 'Stop recording' : 'Start recording'}
+              aria-pressed={speech.listening}
             >
-              {listening ? <Square size={18} fill="currentColor" /> : <Mic size={20} />}
+              {speech.listening ? <Square size={18} fill="currentColor" /> : <Mic size={20} />}
             </button>
           )}
 
@@ -132,7 +71,7 @@ export default function VoiceDump({ onSubmit, processing, currentArea = 'overvie
             type="button"
             className="voice-compose__send"
             onClick={handleSubmit}
-            disabled={!displayText || processing}
+            disabled={!speech.displayText.trim() || processing}
             aria-label={processing ? 'Processing update' : 'Send update'}
           >
             {processing ? <Loader2 size={20} className="spin" /> : <Send size={20} />}

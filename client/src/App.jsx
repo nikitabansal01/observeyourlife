@@ -59,6 +59,7 @@ export default function App() {
   const [syncing, setSyncing] = useState(false);
   const [activeNav, setActiveNav] = useState('today');
   const [interviewPrepFocus, setInterviewPrepFocus] = useState(null);
+  const [companyFocus, setCompanyFocus] = useState(null);
 
   const handleContinuePrep = (appId, round = null) => {
     if (appId) {
@@ -69,6 +70,12 @@ export default function App() {
       });
     }
     setActiveNav('interview');
+  };
+
+  const handleOpenCompanyWorkspace = (appId, tab = 'overview') => {
+    if (!appId) return;
+    setCompanyFocus({ appId, tab });
+    setActiveNav('opportunities');
   };
 
   const handleJobVoiceSubmit = async (transcript) => {
@@ -232,6 +239,9 @@ export default function App() {
                   profile={career.profile}
                   direction={career.direction}
                   onLearningFromReflection={career.addLearningFromReflection}
+                  focusCompanyId={companyFocus?.appId || null}
+                  focusWorkspaceTab={companyFocus?.tab || 'overview'}
+                  onFocusConsumed={() => setCompanyFocus(null)}
                 />
               </>
             ) : activeNav === 'direction' ? (
@@ -251,6 +261,7 @@ export default function App() {
                 direction={career.direction}
                 onUpdateApplication={updateApplication}
                 onNavigate={setActiveNav}
+                onOpenCompanyWorkspace={handleOpenCompanyWorkspace}
                 focusAppId={interviewPrepFocus?.appId || null}
                 focusRoundIndex={interviewPrepFocus?.roundIndex ?? null}
                 focusRoundLabel={interviewPrepFocus?.roundLabel || null}

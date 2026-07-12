@@ -1,5 +1,7 @@
 /** Centralized mock / seed data for Career OS personalized flows. */
 
+import { recommendCareerPaths, getLearningTopicsForDirection } from './careerDirections';
+
 export const EMPTY_SNAPSHOT = {
   currentRole: '',
   yearsExperience: '',
@@ -20,12 +22,23 @@ export const MOCK_RESUME_SNAPSHOT = {
   leadership: 'Led a cross-functional squad of 7; mentored 2 PMs',
 };
 
+/** LinkedIn-style parse: role history is clearer than impact or craft depth. */
+export const MOCK_LINKEDIN_SNAPSHOT = {
+  currentRole: 'Senior Product Manager',
+  yearsExperience: '8',
+  previousRoles: 'Product Manager · Associate PM · Business Analyst',
+  industries: 'SaaS, Fintech',
+  skills: 'Product management, roadmapping, stakeholder management',
+  productsBuilt: 'Analytics and onboarding products',
+  leadership: 'Managed cross-functional partners',
+};
+
 export const DEFAULT_CAREER_PATH = {
-  id: 'ai-pm',
-  title: 'AI Product PM',
-  focusAreas: ['LLM product sense', 'Eval frameworks', 'AI trust & safety basics'],
+  id: 'pm-ai',
+  title: 'AI Product Manager',
+  focusAreas: ['LLM applications', 'AI copilots', 'Agentic workflows'],
   nextAction: 'Map your strongest AI-adjacent stories from recent work',
-  deepen: ['LLM product sense', 'Eval frameworks', 'AI trust & safety basics'],
+  deepen: ['LLM applications', 'AI copilots', 'Agentic workflows'],
   roles: ['AI Product Manager', 'GenAI PM', 'AI Features PM'],
 };
 
@@ -113,7 +126,7 @@ export const STORY_GROUPS = [
 ];
 
 export const PATH_LEARNING_TOPICS = {
-  'AI Product PM': [
+  'AI Product Manager': [
     {
       topic: 'AI evaluation systems',
       time: '45 min',
@@ -125,7 +138,7 @@ export const PATH_LEARNING_TOPICS = {
       exercise: 'Compare two AI workflows and score them on usefulness, reliability, and cost.',
     },
   ],
-  'Platform PM': [
+  'Platform Product Manager': [
     {
       topic: 'Platform adoption metrics',
       time: '45 min',
@@ -137,16 +150,16 @@ export const PATH_LEARNING_TOPICS = {
       exercise: 'Review one internal or public API and write a one-page friction list.',
     },
   ],
-  'Healthcare AI Product Lead': [
+  'Growth Product Manager': [
     {
-      topic: 'Clinical workflow mapping',
-      time: '50 min',
-      exercise: 'Map a patient or clinician journey for one workflow and mark decision points.',
+      topic: 'Experiment design',
+      time: '40 min',
+      exercise: 'Write an experiment brief for one activation or retention idea.',
     },
     {
-      topic: 'Responsible AI in regulated settings',
+      topic: 'Growth loop mapping',
       time: '35 min',
-      exercise: 'Write a go/no-go checklist for an AI feature touching clinical notes.',
+      exercise: 'Sketch the acquisition → activation → retention loop for a product you know.',
     },
   ],
 };
@@ -164,6 +177,186 @@ function firstSentence(text, fallback) {
   return trimmed.length > 110 ? `${trimmed.slice(0, 107)}…` : trimmed;
 }
 
+function fieldText(snapshot, key) {
+  return String(snapshot?.[key] || '').trim();
+}
+
+function hasOutcomeSignal(text) {
+  return /\d|%|\bx\b|growth|retention|revenue|users|nps|conversion|arr|mrr|latency|adoption/i.test(
+    text || ''
+  );
+}
+
+/**
+ * After resume/LinkedIn import, surface what we understood and where
+ * more context would improve career-path quality.
+ */
+export function buildResumeInsights(snapshot = {}, { source = 'upload' } = {}) {
+  const signals = [];
+  const gaps = [];
+
+  const role = fieldText(snapshot, 'currentRole');
+  const years = fieldText(snapshot, 'yearsExperience');
+  const previous = fieldText(snapshot, 'previousRoles');
+  const industries = fieldText(snapshot, 'industries');
+  const skills = fieldText(snapshot, 'skills');
+  const products = fieldText(snapshot, 'productsBuilt');
+  const leadership = fieldText(snapshot, 'leadership');
+
+  if (role && years) {
+    signals.push({
+      id: 'trajectory',
+      title: 'Clear role trajectory',
+      detail: `${role} with about ${years} years of experience.`,
+    });
+  } else if (role) {
+    signals.push({
+      id: 'role',
+      title: 'Current role detected',
+      detail: role,
+    });
+  }
+
+  if (previous) {
+    signals.push({
+      id: 'history',
+      title: 'Career path history',
+      detail: firstSentence(previous, previous),
+    });
+  }
+
+  if (industries) {
+    signals.push({
+      id: 'domains',
+      title: 'Domain exposure',
+      detail: firstSentence(industries, industries),
+    });
+  }
+
+  if (skills && skills.split(/[,;]/).filter(Boolean).length >= 3) {
+    signals.push({
+      id: 'skills',
+      title: 'Skill signal',
+      detail: firstSentence(skills, skills),
+    });
+  }
+
+  if (leadership && leadership.length > 40) {
+    signals.push({
+      id: 'leadership',
+      title: 'Leadership evidence',
+      detail: firstSentence(leadership, leadership),
+    });
+  }
+
+  if (!role) {
+    gaps.push({
+      id: 'missing-role',
+      field: 'currentRole',
+      title: 'Current role',
+      detail: 'We could not confidently read your latest title.',
+      action: 'Confirm your current or most recent role title.',
+    });
+  }
+
+  if (!years) {
+    gaps.push({
+      id: 'missing-years',
+      field: 'yearsExperience',
+      title: 'Years of experience',
+      detail: 'Tenure helps us calibrate seniority of path options.',
+      action: 'Add approximate years of experience.',
+    });
+  }
+
+  if (!products || products.length < 36) {
+    gaps.push({
+      id: 'thin-products',
+      field: 'productsBuilt',
+      title: 'Products or systems built',
+      detail: source === 'linkedin'
+        ? 'LinkedIn rarely spells out what you actually shipped.'
+        : 'Product ownership is thin relative to role history.',
+      action: 'Name 1–2 products and the problem each one solved.',
+    });
+  } else if (!hasOutcomeSignal(products)) {
+    gaps.push({
+      id: 'product-outcomes',
+      field: 'productsBuilt',
+      title: 'Outcomes and impact',
+      detail: 'We see what you built, but not what changed because of it.',
+      action: 'Add a metric, adoption signal, or qualitative outcome for each product.',
+    });
+  }
+
+  if (!skills || skills.length < 24) {
+    gaps.push({
+      id: 'thin-skills',
+      field: 'skills',
+      title: 'Distinctive skills',
+      detail: 'Generic skill labels make path fit harder to judge.',
+      action: 'List the craft skills you want to be known for (not a full keyword dump).',
+    });
+  }
+
+  if (!leadership || leadership.length < 28) {
+    gaps.push({
+      id: 'thin-leadership',
+      field: 'leadership',
+      title: 'Leadership depth',
+      detail: 'Influence and mentoring are easy to understate on a profile.',
+      action: 'Note team size, mentoring, or a cross-org decision you owned.',
+    });
+  }
+
+  if (!industries) {
+    gaps.push({
+      id: 'missing-industries',
+      field: 'industries',
+      title: 'Industry context',
+      detail: 'Domain history helps separate platform, consumer, and specialized paths.',
+      action: 'Add the industries or company types you have worked in.',
+    });
+  }
+
+  // Preference gaps resumes cannot answer — always guide reflection.
+  gaps.push({
+    id: 'energy-pref',
+    field: null,
+    reflectionId: 'energy',
+    title: 'What actually gives you energy',
+    detail: 'Resumes list responsibilities, not which ones you want more of.',
+    action: 'In reflection, describe the work that lit you up — and what you want less of.',
+  });
+
+  gaps.push({
+    id: 'direction-pref',
+    field: null,
+    reflectionId: 'domains',
+    title: 'Where you want to go next',
+    detail: 'Past industries are not the same as future excitement.',
+    action: 'Tell us the domains and stage (0→1 vs scale) you want next.',
+  });
+
+  const sourceLabel = source === 'linkedin' ? 'LinkedIn' : 'resume';
+  const gapFocus = gaps
+    .filter((g) => g.field)
+    .slice(0, 2)
+    .map((g) => g.title.toLowerCase());
+
+  const summary = gapFocus.length
+    ? `From your ${sourceLabel}, we have a usable baseline — but paths will be sharper if you add more on ${gapFocus.join(' and ')}. Reflection still covers preferences resumes cannot see.`
+    : `From your ${sourceLabel}, the factual baseline looks solid. Use reflection for energy, preferences, and what you want to learn next.`;
+
+  return {
+    summary,
+    source,
+    signals: signals.slice(0, 4),
+    gaps: gaps.slice(0, 5),
+    highlightedFields: [...new Set(gaps.map((g) => g.field).filter(Boolean))],
+  };
+}
+
 export function buildAssumptionsFromAnswers(answers = {}, snapshot = {}) {
   return {
     surface: answers.productSurface || 'A mix of both',
@@ -172,81 +365,19 @@ export function buildAssumptionsFromAnswers(answers = {}, snapshot = {}) {
     domains: answers.domains || snapshot.industries || 'AI, platform, health',
     energy: answers.energy || 'Discovery and shipping meaningful product bets',
     learnNext: answers.learnNext || 'Deeper technical fluency and domain ownership',
+    lessOf: answers.lessOf || '',
   };
 }
 
-/** Generate comparable career paths from resume snapshot + preferences. */
-export function buildCareerPaths(snapshot = {}, assumptions = {}) {
-  const skills = firstSentence(snapshot.skills, 'Roadmapping, discovery, stakeholder alignment');
-  const products = firstSentence(snapshot.productsBuilt, 'Analytics and internal tooling');
-  const role = snapshot.currentRole || 'Product Manager';
-  const years = snapshot.yearsExperience || 'several';
-  const leadership = firstSentence(snapshot.leadership, 'Cross-functional leadership');
-  const domains = firstSentence(assumptions.domains, 'AI and platform');
-  const audience = assumptions.audience || 'Both';
-
-  return [
-    {
-      id: 'ai-pm',
-      title: 'AI Product PM',
-      whyFits: `Matches ${years}+ yrs as ${role} with discovery strength and interest in ${domains}.`,
-      evidence: [skills, products, leadership].filter(Boolean),
-      exciting: 'Shaping model-powered workflows users feel day to day.',
-      tradeoffs: 'Ambiguous roadmaps; eval quality often moves slower than demos.',
-      deepen: DEFAULT_CAREER_PATH.deepen,
-      roles: DEFAULT_CAREER_PATH.roles,
-      dimensions: {
-        surface: 'User-facing',
-        audience: audience.includes('B2C') && !audience.includes('B2B') ? 'B2C' : 'B2B-leaning',
-        stage: '0→1 + early scale',
-        technicalDepth: 'Medium-high',
-        gtmExposure: 'Medium',
-        domainSpecialization: 'AI product',
-      },
-    },
-    {
-      id: 'platform-pm',
-      title: 'Platform PM',
-      whyFits: 'Your internal systems work and stakeholder alignment translate well to platform leverage.',
-      evidence: [products, skills, `Prior roles: ${firstSentence(snapshot.previousRoles, 'PM track')}`],
-      exciting: 'Building shared capabilities that multiply many product teams.',
-      tradeoffs: 'Success is indirect; less visible user love, more enablement politics.',
-      deepen: ['Platform strategy', 'API / developer UX', 'Adoption metrics'],
-      roles: ['Platform PM', 'Internal Tools PM', 'Developer Experience PM'],
-      dimensions: {
-        surface: 'Infrastructure',
-        audience: 'B2B / internal',
-        stage: 'Scale systems',
-        technicalDepth: 'High',
-        gtmExposure: 'Low-medium',
-        domainSpecialization: 'Platform',
-      },
-    },
-    {
-      id: 'health-ai',
-      title: 'Healthcare AI Product Lead',
-      whyFits: `Leadership signal plus domain curiosity around ${domains} supports a specialized lead path.`,
-      evidence: [leadership, skills, firstSentence(snapshot.industries, 'Regulated or complex domains')],
-      exciting: 'High-stakes problems where product judgment clearly changes outcomes.',
-      tradeoffs: 'Longer cycles, compliance load, and slower experimentation.',
-      deepen: ['Healthcare workflows', 'Clinical stakeholder mapping', 'Responsible AI'],
-      roles: ['Healthcare AI Product Lead', 'Clinical Product Lead', 'HealthTech Group PM'],
-      dimensions: {
-        surface: 'Mixed',
-        audience: 'B2B',
-        stage: 'Scale with care',
-        technicalDepth: 'Medium',
-        gtmExposure: 'Medium-high',
-        domainSpecialization: 'Healthcare',
-      },
-    },
-  ];
+/** Generate top-3 career routes from resume snapshot + reflection preferences. */
+export function buildCareerPaths(snapshot = {}, assumptions = {}, options = {}) {
+  return recommendCareerPaths(snapshot, assumptions, {
+    answers: options.answers || {},
+    limit: options.limit || 3,
+  });
 }
 
 export function getPathLearningTopics(pathTitle) {
   if (PATH_LEARNING_TOPICS[pathTitle]) return PATH_LEARNING_TOPICS[pathTitle];
-  const lower = (pathTitle || '').toLowerCase();
-  if (lower.includes('platform')) return PATH_LEARNING_TOPICS['Platform PM'];
-  if (lower.includes('health')) return PATH_LEARNING_TOPICS['Healthcare AI Product Lead'];
-  return PATH_LEARNING_TOPICS['AI Product PM'];
+  return getLearningTopicsForDirection(pathTitle);
 }

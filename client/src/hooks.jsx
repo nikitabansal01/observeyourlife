@@ -504,7 +504,9 @@ export function useCareerProfile() {
     const assumptions = overrides.assumptions
       || current.assumptions
       || buildAssumptionsFromAnswers(current.reflection, current.snapshot);
-    const paths = overrides.paths || buildCareerPaths(current.snapshot, assumptions);
+    const paths = overrides.paths || buildCareerPaths(current.snapshot, assumptions, {
+      answers: current.reflection,
+    });
     return commit(applyGeneratedPaths(current, { paths, assumptions }));
   }, [commit]);
 

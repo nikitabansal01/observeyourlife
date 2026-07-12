@@ -14,16 +14,20 @@ import {
   MessageCircle,
   SlidersHorizontal,
   RefreshCw,
+  Lightbulb,
+  ArrowRight,
 } from 'lucide-react';
 import {
   EMPTY_SNAPSHOT,
   MOCK_RESUME_SNAPSHOT,
+  MOCK_LINKEDIN_SNAPSHOT,
   REFLECTION_QUESTIONS,
   SNAPSHOT_FIELDS,
   COMPARISON_DIMENSIONS,
   ASSUMPTION_FIELDS,
   buildAssumptionsFromAnswers,
   buildCareerPaths,
+  buildResumeInsights,
 } from '../careerMocks';
 
 const ACCEPTED_TYPES = '.pdf,.doc,.docx,.txt';
@@ -45,7 +49,18 @@ function PathCard({
       className={`path-card${isPrimary ? ' path-card--primary' : ''}${isSecondary ? ' path-card--secondary' : ''}`}
     >
       <div className="path-card__top">
-        <h3>{path.title}</h3>
+        <div>
+          <div className="path-card__meta">
+            {path.trackLabel && <span className="path-card__track">{path.trackLabel}</span>}
+            {path.category && (
+              <span className={`path-card__category path-card__category--${path.category}`}>
+                {path.category === 'emerging' ? 'AI & emerging' : path.category}
+              </span>
+            )}
+          </div>
+          <h3>{path.title}</h3>
+          <p className="path-card__lead">{path.whyFits}</p>
+        </div>
         <div className="path-card__badges">
           {isPrimary && <span className="path-card__badge path-card__badge--primary">Primary</span>}
           {isSecondary && <span className="path-card__badge path-card__badge--secondary">Secondary</span>}
@@ -54,11 +69,7 @@ function PathCard({
 
       <dl className="path-card__facts">
         <div>
-          <dt>Why it fits</dt>
-          <dd>{path.whyFits}</dd>
-        </div>
-        <div>
-          <dt>Resume evidence</dt>
+          <dt>Evidence</dt>
           <dd>
             <ul>
               {path.evidence.slice(0, 3).map((item) => (
@@ -68,7 +79,7 @@ function PathCard({
           </dd>
         </div>
         <div>
-          <dt>May feel exciting</dt>
+          <dt>Exciting</dt>
           <dd>{path.exciting}</dd>
         </div>
         <div>
@@ -79,7 +90,7 @@ function PathCard({
           <dt>Deepen next</dt>
           <dd>{path.deepen.join(' · ')}</dd>
         </div>
-        <div>
+        <div className="path-card__facts-span">
           <dt>Example roles</dt>
           <dd>{path.roles.join(' · ')}</dd>
         </div>
@@ -137,6 +148,11 @@ export default function CareerDirection({
   const [assumptions, setAssumptions] = useState(null);
   const [editingAssumptions, setEditingAssumptions] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [resumeSource, setResumeSource] = useState(null);
+  const [focusField, setFocusField] = useState(null);
+  const insightsRef = useRef(null);
+  const snapshotSectionRef = useRef(null);
+  const reflectionSectionRef = useRef(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -147,6 +163,7 @@ export default function CareerDirection({
     setHasParsed(Boolean(profile.workflow?.hasResume || profile.resume?.importedAt));
     setFileName(profile.resume?.fileName || '');
     setLinkedinUrl(profile.resume?.linkedinUrl || '');
+    setResumeSource(profile.resume?.source || null);
     setPaths(Array.isArray(profile.generatedPaths) ? profile.generatedPaths : []);
     setAssumptions(profile.assumptions || null);
     setPrimaryPathId(profile.selection?.primaryPathId || null);
@@ -180,26 +197,59 @@ export default function CareerDirection({
     return Math.round(raw * 100);
   }, [answeredCount, hasParsed, importStatus, snapshot]);
 
+  const insights = useMemo(() => {
+    if (!hasParsed) return null;
+    return buildResumeInsights(snapshot, { source: resumeSource || 'upload' });
+  }, [hasParsed, resumeSource, snapshot]);
+
   const simulateParse = async ({ source, sourceLabel, nextFileName, nextLinkedinUrl }) => {
     setImportStatus('loading');
     setImportMessage(`Reading your ${sourceLabel}…`);
     setGenerateNote(null);
+    setFocusField(null);
 
     await new Promise((resolve) => setTimeout(resolve, 1100));
+
+    const parsedSnapshot = source === 'linkedin' ? MOCK_LINKEDIN_SNAPSHOT : MOCK_RESUME_SNAPSHOT;
 
     const next = importResume({
       source,
       fileName: nextFileName || '',
       linkedinUrl: nextLinkedinUrl || '',
-      snapshot: MOCK_RESUME_SNAPSHOT,
+      snapshot: parsedSnapshot,
     });
 
-    setSnapshot(next?.snapshot || MOCK_RESUME_SNAPSHOT);
+    setSnapshot(next?.snapshot || parsedSnapshot);
     setHasParsed(true);
+    setResumeSource(source);
     setFileName(next?.resume?.fileName || nextFileName || '');
     setLinkedinUrl(next?.resume?.linkedinUrl || nextLinkedinUrl || '');
     setImportStatus('success');
-    setImportMessage('Resume context loaded — edit anything that looks off. This is context, not a score.');
+    setImportMessage(
+      'Context loaded. Review the insights below — they show what we understood and what still needs your input.'
+    );
+
+    requestAnimationFrame(() => {
+      insightsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  };
+
+  const jumpToSnapshotField = (fieldKey) => {
+    if (!fieldKey) return;
+    setFocusField(fieldKey);
+    snapshotSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.setTimeout(() => {
+      const input = snapshotSectionRef.current?.querySelector(
+        `[data-field="${fieldKey}"] .compass-field__input`
+      );
+      input?.focus?.();
+    }, 280);
+  };
+
+  const jumpToReflection = (questionId) => {
+    const index = REFLECTION_QUESTIONS.findIndex((q) => q.id === questionId);
+    if (index >= 0) setQuestionIndex(index);
+    reflectionSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const handleUploadClick = () => fileInputRef.current?.click();
@@ -290,7 +340,11 @@ export default function CareerDirection({
   const applyGeneratedProfile = (next) => {
     const nextPaths = next?.generatedPaths?.length
       ? next.generatedPaths
-      : buildCareerPaths(snapshot, next?.assumptions || assumptions || buildAssumptionsFromAnswers(answers, snapshot));
+      : buildCareerPaths(
+        snapshot,
+        next?.assumptions || assumptions || buildAssumptionsFromAnswers(answers, snapshot),
+        { answers }
+      );
     setPaths(nextPaths);
     setAssumptions(next?.assumptions || null);
     setPrimaryPathId(next?.selection?.primaryPathId || null);
@@ -360,8 +414,12 @@ export default function CareerDirection({
     return (
       <section className="career-direction career-direction--results">
         <header className="ui-section ui-section--header career-direction__intro">
-          <h2>Possible paths to explore</h2>
-          <p>These are options to compare — not a single recommendation.</p>
+          <h2>Top routes for you</h2>
+          <p>
+            Ranked from your resume strengths and reflection answers
+            {paths[0]?.trackLabel ? ` within ${paths[0].trackLabel}` : ''}
+            — compare, then pick a primary.
+          </p>
         </header>
 
         <div className="career-direction__results-toolbar">
@@ -487,29 +545,30 @@ export default function CareerDirection({
   return (
     <section className="career-direction">
       <header className="ui-section ui-section--header career-direction__intro">
-        <h2>What do you want to build next?</h2>
-        <p>Start with your experience, then explore the work that gives you energy.</p>
+        <div className="career-direction__intro-row">
+          <div>
+            <h2>What do you want to build next?</h2>
+            <p>Start with your experience, then explore the work that gives you energy.</p>
+          </div>
+          <div className="career-direction__progress-compact" aria-live="polite">
+            <div className="career-direction__progress-compact-top">
+              <span>Profile</span>
+              <strong>{progress}%</strong>
+            </div>
+            <div
+              className="career-direction__progress-track"
+              role="progressbar"
+              aria-valuenow={progress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Career profile completeness"
+            >
+              <div className="career-direction__progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+            <p>Resume is context, not a score.</p>
+          </div>
+        </div>
       </header>
-
-      <div className="career-direction__progress-card" aria-live="polite">
-        <div className="career-direction__progress-top">
-          <span className="ui-block__label">Profile completeness</span>
-          <strong>{progress}%</strong>
-        </div>
-        <div
-          className="career-direction__progress-track"
-          role="progressbar"
-          aria-valuenow={progress}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Career profile completeness"
-        >
-          <div className="career-direction__progress-fill" style={{ width: `${progress}%` }} />
-        </div>
-        <p className="career-direction__progress-hint">
-          Resume is context for understanding you — not something we score.
-        </p>
-      </div>
 
       <div className="career-direction__card">
         <div className="career-direction__card-header">
@@ -588,7 +647,68 @@ export default function CareerDirection({
         )}
       </div>
 
-      <div className="career-direction__card">
+      {insights && (
+        <div
+          ref={insightsRef}
+          className="career-direction__card career-direction__insights"
+          aria-live="polite"
+        >
+          <div className="career-direction__card-header">
+            <Lightbulb size={18} />
+            <div>
+              <h3>Import insights</h3>
+              <p>What we already understand — and where more context will improve your path options.</p>
+            </div>
+          </div>
+
+          <p className="career-direction__insights-summary">{insights.summary}</p>
+
+          <div className="career-direction__insights-grid">
+            <section>
+              <h4>Signals we picked up</h4>
+              {insights.signals.length === 0 ? (
+                <p className="career-direction__insights-empty">
+                  Not much structured signal yet — fill the snapshot below so we have a baseline.
+                </p>
+              ) : (
+                <ul className="career-direction__insight-list">
+                  {insights.signals.map((item) => (
+                    <li key={item.id}>
+                      <strong>{item.title}</strong>
+                      <span>{item.detail}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section>
+              <h4>Add more context on</h4>
+              <ul className="career-direction__insight-list career-direction__insight-list--gaps">
+                {insights.gaps.map((item) => (
+                  <li key={item.id}>
+                    <strong>{item.title}</strong>
+                    <span>{item.detail}</span>
+                    <button
+                      type="button"
+                      className="auth-btn career-direction__insight-action"
+                      onClick={() => {
+                        if (item.field) jumpToSnapshotField(item.field);
+                        else if (item.reflectionId) jumpToReflection(item.reflectionId);
+                      }}
+                    >
+                      {item.action}
+                      <ArrowRight size={14} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+        </div>
+      )}
+
+      <div ref={snapshotSectionRef} className="career-direction__card">
         <div className="career-direction__card-header">
           <Sparkles size={18} />
           <div>
@@ -602,32 +722,45 @@ export default function CareerDirection({
         </div>
 
         <div className="career-direction__snapshot-grid">
-          {SNAPSHOT_FIELDS.map((field) => (
-            <label key={field.key} className="career-direction__field">
-              <span>{field.label}</span>
-              {field.multiline ? (
-                <textarea
-                  className="compass-field__input"
-                  rows={3}
-                  value={snapshot[field.key]}
-                  onChange={(e) => handleSnapshotChange(field.key, e.target.value)}
-                  placeholder={field.placeholder}
-                />
-              ) : (
-                <input
-                  className="compass-field__input"
-                  type="text"
-                  value={snapshot[field.key]}
-                  onChange={(e) => handleSnapshotChange(field.key, e.target.value)}
-                  placeholder={field.placeholder}
-                />
-              )}
-            </label>
-          ))}
+          {SNAPSHOT_FIELDS.map((field) => {
+            const needsContext = insights?.highlightedFields?.includes(field.key);
+            const focused = focusField === field.key;
+            return (
+              <label
+                key={field.key}
+                data-field={field.key}
+                className={`career-direction__field${needsContext ? ' career-direction__field--needs-context' : ''}${focused ? ' career-direction__field--focused' : ''}`}
+              >
+                <span>
+                  {field.label}
+                  {needsContext ? ' · needs more context' : ''}
+                </span>
+                {field.multiline ? (
+                  <textarea
+                    className="compass-field__input"
+                    rows={3}
+                    value={snapshot[field.key]}
+                    onChange={(e) => handleSnapshotChange(field.key, e.target.value)}
+                    onFocus={() => setFocusField(field.key)}
+                    placeholder={field.placeholder}
+                  />
+                ) : (
+                  <input
+                    className="compass-field__input"
+                    type="text"
+                    value={snapshot[field.key]}
+                    onChange={(e) => handleSnapshotChange(field.key, e.target.value)}
+                    onFocus={() => setFocusField(field.key)}
+                    placeholder={field.placeholder}
+                  />
+                )}
+              </label>
+            );
+          })}
         </div>
       </div>
 
-      <div className="career-direction__card career-direction__reflection">
+      <div ref={reflectionSectionRef} className="career-direction__card career-direction__reflection">
         <div className="career-direction__card-header">
           <div>
             <h3>Conversational reflection</h3>

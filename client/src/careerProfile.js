@@ -153,7 +153,7 @@ export function buildSelectionFromPaths(paths, primaryId, secondaryId) {
     primaryTitle: primary.title,
     secondaryPathId: secondary?.id || null,
     secondaryTitle: secondary?.title || null,
-    focusAreas: primary.deepen || [],
+    focusAreas: primary.focusAreas || primary.deepen || [],
     nextAction: `Practice a story that shows fit for ${primary.title}`,
     updatedAt: new Date().toISOString(),
   };
@@ -195,8 +195,11 @@ export function applyReflection(profile, { answers, complete = false }) {
 
 export function applyGeneratedPaths(profile, { paths, assumptions }) {
   const next = normalizeCareerProfile(profile);
-  next.generatedPaths = Array.isArray(paths) ? paths : buildCareerPaths(next.snapshot, assumptions || next.assumptions || {});
-  next.assumptions = assumptions || next.assumptions || buildAssumptionsFromAnswers(next.reflection, next.snapshot);
+  const resolvedAssumptions = assumptions || next.assumptions || buildAssumptionsFromAnswers(next.reflection, next.snapshot);
+  next.generatedPaths = Array.isArray(paths)
+    ? paths
+    : buildCareerPaths(next.snapshot, resolvedAssumptions, { answers: next.reflection });
+  next.assumptions = resolvedAssumptions;
   next.updatedAt = new Date().toISOString();
   next.workflow = deriveWorkflow(next);
   return next;
@@ -206,7 +209,11 @@ export function applyPathSelection(profile, { primaryPathId, secondaryPathId }) 
   const next = normalizeCareerProfile(profile);
   const paths = next.generatedPaths.length
     ? next.generatedPaths
-    : buildCareerPaths(next.snapshot, next.assumptions || buildAssumptionsFromAnswers(next.reflection, next.snapshot));
+    : buildCareerPaths(
+      next.snapshot,
+      next.assumptions || buildAssumptionsFromAnswers(next.reflection, next.snapshot),
+      { answers: next.reflection }
+    );
   if (!next.generatedPaths.length) next.generatedPaths = paths;
   next.selection = buildSelectionFromPaths(paths, primaryPathId, secondaryPathId);
   next.learningTopics = (next.selection.focusAreas || []).map((topic, index) => ({

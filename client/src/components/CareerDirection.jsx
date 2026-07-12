@@ -210,6 +210,7 @@ export default function CareerDirection({
   const [resumeSource, setResumeSource] = useState(null);
   const [focusField, setFocusField] = useState(null);
   const [exploredRouteId, setExploredRouteId] = useState(null);
+  const [importBaseline, setImportBaseline] = useState(null);
   const snapshotSectionRef = useRef(null);
   const reflectionSectionRef = useRef(null);
 
@@ -223,6 +224,7 @@ export default function CareerDirection({
     setFileName(profile.resume?.fileName || '');
     setLinkedinUrl(profile.resume?.linkedinUrl || '');
     setResumeSource(profile.resume?.source || null);
+    setImportBaseline(profile.importBaseline || null);
     setPaths(Array.isArray(profile.generatedPaths) ? profile.generatedPaths : []);
     setAssumptions(profile.assumptions || null);
     setPrimaryPathId(profile.selection?.primaryPathId || null);
@@ -311,7 +313,9 @@ export default function CareerDirection({
       snapshot: parsedSnapshot,
     });
 
-    setSnapshot(next?.snapshot || parsedSnapshot);
+    const nextSnapshot = next?.snapshot || parsedSnapshot;
+    setSnapshot(nextSnapshot);
+    setImportBaseline({ ...EMPTY_SNAPSHOT, ...nextSnapshot });
     setHasParsed(true);
     setResumeSource(source);
     setFileName(next?.resume?.fileName || nextFileName || '');
@@ -319,12 +323,9 @@ export default function CareerDirection({
     setImportStatus('success');
 
     if (parseMode === 'llm') {
-      setImportMessage(warning || 'Background extracted with AI — skim We got / Your turn, then fix anything thin.');
+      setImportMessage(warning || 'Cyan = from resume. Amber = still need you.');
     } else {
-      setImportMessage(
-        warning
-          || 'Demo snapshot loaded. Paste resume text or set OPENAI_API_KEY for grounded AI parsing.'
-      );
+      setImportMessage(warning || 'Demo snapshot — paste resume text for AI parse.');
     }
 
     requestAnimationFrame(() => {
@@ -342,6 +343,30 @@ export default function CareerDirection({
       );
       input?.focus?.();
     }, 280);
+  };
+
+  function fieldStatus(key) {
+    const value = snapshot[key];
+    const filled = fieldFilled(value);
+    const needs = (insights?.highlightedFields || []).includes(key);
+    const baseline = importBaseline?.[key];
+    const hadBaseline = fieldFilled(baseline);
+    const unchanged = hadBaseline && String(value || '').trim() === String(baseline || '').trim();
+
+    if (needs && !filled) return 'add';
+    if (needs && filled) return 'review';
+    if (!filled) return 'add';
+    if (hadBaseline && unchanged) return 'from-resume';
+    if (hadBaseline && !unchanged) return 'yours';
+    if (hasParsed && filled && !importBaseline) return 'from-resume';
+    return 'yours';
+  }
+
+  const FIELD_STATUS_LABEL = {
+    'from-resume': 'From resume',
+    review: 'Review',
+    add: 'Write new',
+    yours: 'Yours',
   };
 
   const jumpToReflection = (questionId) => {
@@ -577,7 +602,6 @@ export default function CareerDirection({
       <section className="career-direction career-direction--results">
         <header className="ui-section ui-section--header career-direction__intro career-direction__intro--results">
           <h2>Your strongest routes</h2>
-          <p>Based on your background and what you want next.</p>
         </header>
 
         <div className="career-direction__results-toolbar">
@@ -677,8 +701,7 @@ export default function CareerDirection({
       <header className="ui-section ui-section--header career-direction__intro">
         <div className="career-direction__intro-row">
           <div>
-            <h2>What do you want to build next?</h2>
-            <p>Start with your experience, then explore the work that gives you energy.</p>
+            <h2>Career Direction</h2>
           </div>
           <div className="career-direction__progress-compact" aria-live="polite">
             <div className="career-direction__progress-compact-top">
@@ -695,7 +718,6 @@ export default function CareerDirection({
             >
               <div className="career-direction__progress-fill" style={{ width: `${progress}%` }} />
             </div>
-            <p>Resume is context, not a score.</p>
           </div>
         </div>
       </header>
@@ -704,8 +726,7 @@ export default function CareerDirection({
         <div className="career-direction__card-header">
           <FileText size={18} />
           <div>
-            <h3>Resume import</h3>
-            <p>Paste resume text (best), upload .txt, or add LinkedIn — AI extracts your background.</p>
+            <h3>Resume</h3>
           </div>
         </div>
 
@@ -727,7 +748,7 @@ export default function CareerDirection({
             Upload .txt
           </button>
           <div className="career-direction__linkedin">
-            <label htmlFor="linkedin-url">LinkedIn URL (optional)</label>
+            <label htmlFor="linkedin-url">LinkedIn URL</label>
             <div className="career-direction__linkedin-row">
               <div className="career-direction__linkedin-input-wrap">
                 <Link2 size={16} />
@@ -753,14 +774,14 @@ export default function CareerDirection({
         </div>
 
         <label className="career-direction__paste" htmlFor="resume-text">
-          <span>Paste resume text</span>
+          <span>Resume text</span>
           <textarea
             id="resume-text"
             className="compass-field__input"
             rows={4}
             value={resumeText}
             onChange={(e) => setResumeText(e.target.value)}
-            placeholder="Paste the plain text of your resume here for grounded AI parsing…"
+            placeholder="Paste resume text…"
             disabled={importStatus === 'loading'}
           />
         </label>
@@ -772,12 +793,11 @@ export default function CareerDirection({
             disabled={importStatus === 'loading'}
           >
             {importStatus === 'loading' ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}
-            Import from text
+            Import
           </button>
-          <p className="career-direction__file-note">
-            .txt upload works directly. For PDF/DOCX, paste the text here.
-            {fileName ? ` · Selected: ${fileName}` : ''}
-          </p>
+          {fileName ? (
+            <p className="career-direction__file-note">{fileName}</p>
+          ) : null}
         </div>
 
         {importStatus === 'loading' && (
@@ -804,35 +824,36 @@ export default function CareerDirection({
         <div className="career-direction__card-header">
           <Sparkles size={18} />
           <div>
-            <h3>Your background</h3>
-            <p>
-              {hasParsed
-                ? 'One place to edit. Cyan = we inferred it. Amber = still needs you.'
-                : 'Upload a resume to prefill, or fill this in yourself.'}
-            </p>
+            <h3>Background</h3>
           </div>
         </div>
 
         {insights && (
-          <div className="career-direction__parse-brief" aria-live="polite">
-            <div className="career-direction__parse-row career-direction__parse-row--ai">
-              <span className="career-direction__parse-kicker">We got</span>
+          <div className="career-direction__lanes" aria-live="polite">
+            <div className="career-direction__lane career-direction__lane--got">
+              <div className="career-direction__lane-head">
+                <span className="career-direction__lane-kicker">Pulled from resume</span>
+                <p className="career-direction__lane-sub">Confirmed — edit if wrong</p>
+              </div>
               {insights.signals.length === 0 ? (
-                <span className="career-direction__parse-empty">Not much yet — fill the fields below.</span>
+                <span className="career-direction__parse-empty">Nothing solid yet.</span>
               ) : (
                 <div className="career-direction__parse-chips">
                   {insights.signals.map((item) => (
                     <span key={item.id} className="career-direction__chip career-direction__chip--ai">
-                      {item.label}
+                      {item.label || item.title}
                     </span>
                   ))}
                 </div>
               )}
             </div>
 
-            {(insights.fieldGaps?.length > 0 || insights.reflectionGap) && (
-              <div className="career-direction__parse-row career-direction__parse-row--you">
-                <span className="career-direction__parse-kicker">Your turn</span>
+            <div className="career-direction__lane career-direction__lane--need">
+              <div className="career-direction__lane-head">
+                <span className="career-direction__lane-kicker">Still need from you</span>
+                <p className="career-direction__lane-sub">Not on the resume — write these</p>
+              </div>
+              {(insights.fieldGaps?.length > 0 || insights.reflectionGap) ? (
                 <div className="career-direction__parse-chips">
                   {insights.fieldGaps?.map((item) => (
                     <button
@@ -841,7 +862,7 @@ export default function CareerDirection({
                       className="career-direction__chip career-direction__chip--you"
                       onClick={() => jumpToSnapshotField(item.field)}
                     >
-                      {item.label}
+                      {item.label || item.title}
                     </button>
                   ))}
                   {insights.reflectionGap && (
@@ -854,27 +875,33 @@ export default function CareerDirection({
                     </button>
                   )}
                 </div>
-              </div>
-            )}
+              ) : (
+                <span className="career-direction__parse-empty">Gaps cleared.</span>
+              )}
+            </div>
           </div>
         )}
 
         <div className="career-direction__snapshot-grid">
           {SNAPSHOT_FIELDS.map((field) => {
-            const needsContext = insights?.highlightedFields?.includes(field.key);
+            const status = hasParsed ? fieldStatus(field.key) : (fieldFilled(snapshot[field.key]) ? 'yours' : 'add');
             const hint = insights?.fieldHints?.[field.key];
             const focused = focusField === field.key;
             return (
               <label
                 key={field.key}
                 data-field={field.key}
-                className={`career-direction__field${needsContext ? ' career-direction__field--needs-context' : ''}${focused ? ' career-direction__field--focused' : ''}`}
+                className={`career-direction__field career-direction__field--${status}${focused ? ' career-direction__field--focused' : ''}`}
               >
                 <span className="career-direction__field-label">
                   {field.label}
-                  {needsContext && <em>needs you</em>}
+                  <em className={`career-direction__field-badge career-direction__field-badge--${status}`}>
+                    {FIELD_STATUS_LABEL[status]}
+                  </em>
                 </span>
-                {hint && <span className="career-direction__field-hint">{hint}</span>}
+                {hint && status !== 'from-resume' && (
+                  <span className="career-direction__field-hint">{hint}</span>
+                )}
                 {field.multiline ? (
                   <textarea
                     className="compass-field__input"
@@ -900,11 +927,11 @@ export default function CareerDirection({
         </div>
       </div>
 
-      <div ref={reflectionSectionRef} className="career-direction__card career-direction__reflection">
+      <div ref={reflectionSectionRef} className="career-direction__card career-direction__reflection career-direction__reflection--write">
         <div className="career-direction__card-header">
           <div>
-            <h3>Quick preferences</h3>
-            <p>Resumes miss this. Answer a few preferences, then generate paths.</p>
+            <span className="career-direction__write-kicker">Your words · not from resume</span>
+            <h3>Preferences</h3>
           </div>
           <span className="career-direction__question-count">
             {questionIndex + 1} / {REFLECTION_QUESTIONS.length}

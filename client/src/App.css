@@ -124,29 +124,21 @@
   color: var(--accent-cyan);
 }
 
-.header__icon--mobile-only {
-  display: none;
+.header__brand.header__brand--mobile-only {
+  display: none !important;
+}
+
+.pillars-strip-wrap.pillars-strip-wrap--mobile-only {
+  display: none !important;
 }
 
 @media (min-width: 901px) {
-  .header__wordmark--desktop-hide {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
+  .header {
+    justify-content: flex-end;
   }
 
-  .header__brand {
-    align-items: flex-start;
-  }
-
-  .header__brand > div:last-child {
-    padding-top: 0.15rem;
+  .header__meta {
+    width: 100%;
   }
 }
 
@@ -1875,26 +1867,29 @@
     display: none;
   }
 
+  .header__brand.header__brand--mobile-only {
+    display: flex !important;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .pillars-strip-wrap.pillars-strip-wrap--mobile-only {
+    display: block !important;
+  }
+
   .header {
     flex-wrap: wrap;
     padding: 1rem 1rem;
+    justify-content: space-between;
   }
 
   .header__brand {
     flex: 1 1 12rem;
   }
 
-  .header__brand p {
-    max-width: none;
-  }
-
   .header__meta {
     flex: 1 1 auto;
-    justify-content: flex-start;
-  }
-
-  .header__icon--mobile-only {
-    display: grid;
+    justify-content: flex-end;
   }
 
   .mobile-nav {
@@ -3380,38 +3375,60 @@
   font-size: 0.9rem;
 }
 
-.career-direction__parse-brief {
+.career-direction__lanes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1.15rem;
+}
+
+.career-direction__lane {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
-  margin-bottom: 1rem;
-  padding: 0.75rem 0.85rem;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.16);
-  border: 1px solid var(--border-subtle);
+  padding: 0.85rem 0.95rem;
+  border-radius: 14px;
+  min-width: 0;
 }
 
-.career-direction__parse-row {
+.career-direction__lane--got {
+  background: color-mix(in srgb, var(--accent-cyan) 10%, rgba(0, 0, 0, 0.22));
+  border: 1px solid color-mix(in srgb, var(--accent-cyan) 38%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent-cyan);
+}
+
+.career-direction__lane--need {
+  background: color-mix(in srgb, var(--accent-yellow) 12%, rgba(0, 0, 0, 0.22));
+  border: 1px solid color-mix(in srgb, var(--accent-yellow) 42%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent-yellow);
+}
+
+.career-direction__lane-head {
   display: flex;
-  align-items: flex-start;
-  gap: 0.65rem;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
-.career-direction__parse-kicker {
-  flex: 0 0 4.5rem;
-  margin-top: 0.2rem;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+.career-direction__lane-kicker {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
-.career-direction__parse-row--ai .career-direction__parse-kicker {
+.career-direction__lane--got .career-direction__lane-kicker {
   color: var(--accent-cyan);
 }
 
-.career-direction__parse-row--you .career-direction__parse-kicker {
+.career-direction__lane--need .career-direction__lane-kicker {
   color: var(--accent-yellow);
+}
+
+.career-direction__lane-sub {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.35;
 }
 
 .career-direction__parse-empty {
@@ -3439,40 +3456,67 @@
 
 .career-direction__chip--ai {
   color: color-mix(in srgb, var(--text) 92%, var(--accent-cyan));
-  background: color-mix(in srgb, var(--accent-cyan) 12%, transparent);
-  border-color: color-mix(in srgb, var(--accent-cyan) 28%, transparent);
+  background: color-mix(in srgb, var(--accent-cyan) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent-cyan) 32%, transparent);
+  cursor: default;
 }
 
 button.career-direction__chip--you {
-  color: color-mix(in srgb, var(--text) 92%, var(--accent-yellow));
-  background: color-mix(in srgb, var(--accent-yellow) 12%, transparent);
-  border-color: color-mix(in srgb, var(--accent-yellow) 32%, transparent);
+  color: #1a1408;
+  background: color-mix(in srgb, var(--accent-yellow) 82%, white);
+  border-color: color-mix(in srgb, var(--accent-yellow) 55%, transparent);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: filter 0.15s, transform 0.15s;
 }
 
 button.career-direction__chip--you:hover {
-  background: color-mix(in srgb, var(--accent-yellow) 20%, transparent);
-  border-color: color-mix(in srgb, var(--accent-yellow) 45%, transparent);
+  filter: brightness(1.06);
+  transform: translateY(-1px);
 }
 
 .career-direction__field-label {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
-.career-direction__field-label em {
+.career-direction__field-badge {
   font-style: normal;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--accent-yellow);
-  padding: 0.1rem 0.35rem;
+  padding: 0.12rem 0.4rem;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent-yellow) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent-yellow) 28%, transparent);
+  border: 1px solid transparent;
+}
+
+.career-direction__field-badge--from-resume {
+  color: var(--accent-cyan);
+  background: color-mix(in srgb, var(--accent-cyan) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent-cyan) 30%, transparent);
+}
+
+.career-direction__field-badge--review {
+  color: var(--accent-yellow);
+  background: color-mix(in srgb, var(--accent-yellow) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent-yellow) 36%, transparent);
+}
+
+.career-direction__field-badge--add {
+  color: color-mix(in srgb, var(--accent-magenta) 80%, white);
+  background: color-mix(in srgb, var(--accent-magenta) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent-magenta) 34%, transparent);
+}
+
+.career-direction__field-badge--yours {
+  color: color-mix(in srgb, var(--accent-lime) 85%, white);
+  background: color-mix(in srgb, var(--accent-lime) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent-lime) 32%, transparent);
 }
 
 .career-direction__field-hint {
@@ -3482,10 +3526,61 @@ button.career-direction__chip--you:hover {
   margin-top: -0.15rem;
 }
 
-.career-direction__field--needs-context .compass-field__input,
+.career-direction__field--from-resume .compass-field__input {
+  border-color: color-mix(in srgb, var(--accent-cyan) 36%, var(--border));
+  background: color-mix(in srgb, var(--accent-cyan) 7%, rgba(0, 0, 0, 0.22));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-cyan) 70%, transparent);
+}
+
+.career-direction__field--review .compass-field__input {
+  border-color: color-mix(in srgb, var(--accent-yellow) 48%, var(--border));
+  background: color-mix(in srgb, var(--accent-yellow) 8%, rgba(0, 0, 0, 0.22));
+  box-shadow: inset 3px 0 0 var(--accent-yellow);
+}
+
+.career-direction__field--add .compass-field__input {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--accent-magenta) 42%, var(--border));
+  background: color-mix(in srgb, var(--accent-magenta) 6%, rgba(0, 0, 0, 0.28));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-magenta) 65%, transparent);
+}
+
+.career-direction__field--yours .compass-field__input {
+  border-color: color-mix(in srgb, var(--accent-lime) 38%, var(--border));
+  background: color-mix(in srgb, var(--accent-lime) 6%, rgba(0, 0, 0, 0.22));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-lime) 70%, transparent);
+}
+
 .career-direction__field--focused .compass-field__input {
-  border-color: color-mix(in srgb, var(--accent-yellow) 40%, var(--border));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-yellow) 18%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--accent-violet) 45%, transparent);
+}
+
+.career-direction__write-kicker {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent-yellow);
+}
+
+.career-direction__reflection--write {
+  border-color: color-mix(in srgb, var(--accent-yellow) 34%, var(--border));
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--accent-yellow) 10%, transparent),
+      transparent 42%
+    ),
+    var(--surface-elevated, rgba(0, 0, 0, 0.22));
+  box-shadow: inset 0 3px 0 color-mix(in srgb, var(--accent-yellow) 55%, transparent);
+}
+
+.career-direction__reflection--write .compass-field__input {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent-yellow) 28%, var(--border));
+  min-height: 6.5rem;
 }
 
 .career-direction__snapshot-grid {
@@ -3500,14 +3595,14 @@ button.career-direction__chip--you:hover {
   gap: 0.4rem;
 }
 
-.career-direction__field span {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
 .career-direction__field:nth-child(n + 3) {
   grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .career-direction__lanes {
+    grid-template-columns: 1fr;
+  }
 }
 
 .career-direction__question {

@@ -38,7 +38,6 @@ export default function PillarsStrip({ activeNav, onNavigate }) {
             aria-current={active ? 'true' : undefined}
           >
             <span className="pillars-strip__label">{pillar.label}</span>
-            <span className="pillars-strip__hint">{pillar.hint}</span>
           </button>
         );
       })}

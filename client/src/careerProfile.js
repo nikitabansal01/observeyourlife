@@ -21,6 +21,7 @@ export function createEmptyCareerProfile() {
       importedAt: null,
     },
     snapshot: { ...EMPTY_SNAPSHOT },
+    importBaseline: null,
     reflection: {},
     reflectionComplete: false,
     assumptions: null,
@@ -80,6 +81,9 @@ export function normalizeCareerProfile(raw) {
     userProfile: { ...base.userProfile, ...(raw.userProfile || {}) },
     resume: { ...base.resume, ...(raw.resume || {}) },
     snapshot: { ...base.snapshot, ...(raw.snapshot || {}) },
+    importBaseline: raw.importBaseline && typeof raw.importBaseline === 'object'
+      ? { ...EMPTY_SNAPSHOT, ...raw.importBaseline }
+      : null,
     reflection: { ...(raw.reflection || {}) },
     assumptions: raw.assumptions || null,
     generatedPaths: Array.isArray(raw.generatedPaths) ? raw.generatedPaths : [],
@@ -168,6 +172,7 @@ export function applyResumeImport(profile, { source, fileName = '', linkedinUrl 
     importedAt: new Date().toISOString(),
   };
   next.snapshot = { ...EMPTY_SNAPSHOT, ...snapshot };
+  next.importBaseline = { ...EMPTY_SNAPSHOT, ...snapshot };
   next.updatedAt = new Date().toISOString();
   next.workflow = deriveWorkflow(next);
   return next;

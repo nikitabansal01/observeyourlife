@@ -14,7 +14,7 @@ import CareerDirection from './components/CareerDirection';
 import Today from './components/Today';
 import InterviewPrep from './components/InterviewPrep';
 import Learning from './components/Learning';
-import PillarsStrip, { getPillarForNav } from './components/PillarsStrip';
+import PillarsStrip from './components/PillarsStrip';
 import { PageError, PageLoading } from './components/PageStatus';
 import { useApplications, useHealth, useAuth, useCareerProfile } from './hooks';
 import './App.css';
@@ -137,7 +137,6 @@ export default function App() {
     ));
   };
 
-  const activePillar = getPillarForNav(activeNav);
   const showPipelineLoading = loading && ['today', 'interview', 'learning', 'opportunities'].includes(activeNav);
 
   return (
@@ -155,7 +154,6 @@ export default function App() {
             </div>
             <div>
               <p className="sidebar__wordmark">Career OS</p>
-              <p className="sidebar__tag">Decide · Track · Prepare</p>
             </div>
           </div>
           <nav className="sidebar__nav">{renderNavButtons('sidebar')}</nav>
@@ -163,18 +161,11 @@ export default function App() {
 
         <div className="app-shell__main">
           <header className="header">
-            <div className="header__brand">
-              <div className="header__icon header__icon--mobile-only">
+            <div className="header__brand header__brand--mobile-only">
+              <div className="header__icon">
                 <Briefcase size={22} />
               </div>
-              <div>
-                <h1 className="header__wordmark header__wordmark--desktop-hide">Career OS</h1>
-                <p>
-                  {activePillar
-                    ? `${activePillar.label}. Understand where you want to go, track every opportunity, and prepare with context.`
-                    : 'Understand where you want to go, track every opportunity, and prepare with context.'}
-                </p>
-              </div>
+              <h1 className="header__wordmark">Career OS</h1>
             </div>
             <div className="header__meta">
               <span className={`mode-badge ${aiEnabled ? 'mode-badge--ai' : ''}`}>
@@ -187,7 +178,7 @@ export default function App() {
             </div>
           </header>
 
-          <div className="pillars-strip-wrap">
+          <div className="pillars-strip-wrap pillars-strip-wrap--mobile-only">
             <PillarsStrip activeNav={activeNav} onNavigate={setActiveNav} />
           </div>
 

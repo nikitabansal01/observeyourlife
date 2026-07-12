@@ -54,7 +54,6 @@ export default function Today({
     <section className="today page-section">
       <header className="ui-section ui-section--header today__intro">
         <h2>Today</h2>
-        <p>What needs attention, what’s next, and whether you’re moving toward your direction.</p>
       </header>
 
       <div className="today__grid">
@@ -63,7 +62,6 @@ export default function Today({
             <CalendarClock size={18} />
             <div>
               <h3>Next interview</h3>
-              <p>Your soonest upcoming conversation</p>
             </div>
           </div>
 
@@ -117,16 +115,15 @@ export default function Today({
           <div className="os-card__header today-card__header">
             <CheckSquare size={18} />
             <div>
-              <h3>Today’s priorities</h3>
-              <p>Pull from next steps, follow-ups, and prep flags</p>
+              <h3>Priorities</h3>
             </div>
           </div>
           {priorities.length === 0 ? (
             <EmptyState
               compact
               title="No priorities yet"
-              body="Add next steps on opportunities or start Career Direction to get suggested focus."
-              actionLabel="Go to opportunities"
+              body="Add next steps on opportunities."
+              actionLabel="Opportunities"
               onAction={() => onNavigate?.('opportunities')}
             />
           ) : (
@@ -148,25 +145,20 @@ export default function Today({
           <div className="os-card__header today-card__header">
             <Compass size={18} />
             <div>
-              <h3>Career direction snapshot</h3>
-              <p>
-                {direction.isMock
-                  ? 'Default target until you choose a path'
-                  : 'From your selected primary path'}
-              </p>
+              <h3>Direction</h3>
             </div>
           </div>
           <dl className="today-direction__facts">
             <div>
-              <dt>Primary target path</dt>
+              <dt>Path</dt>
               <dd>{direction.primaryTitle}</dd>
             </div>
             <div>
-              <dt>Current focus areas</dt>
+              <dt>Focus</dt>
               <dd>{direction.focusAreas.join(' · ')}</dd>
             </div>
             <div>
-              <dt>Recommended next action</dt>
+              <dt>Next</dt>
               <dd>{direction.nextAction}</dd>
             </div>
           </dl>
@@ -175,15 +167,14 @@ export default function Today({
             className="auth-btn auth-btn--primary"
             onClick={() => onNavigate?.('direction')}
           >
-            {direction.isMock ? 'Choose a path' : 'Review direction'}
+            {direction.isMock ? 'Choose a path' : 'Review'}
           </button>
         </article>
 
         <article className="os-card today-card today-card--pipeline">
           <div className="os-card__header today-card__header">
             <div>
-              <h3>Pipeline summary</h3>
-              <p>Live counts from your opportunity tracker</p>
+              <h3>Pipeline</h3>
             </div>
           </div>
           <div className="today-stat-grid">
@@ -210,8 +201,7 @@ export default function Today({
           <div className="os-card__header today-card__header">
             <BookOpen size={18} />
             <div>
-              <h3>Learning focus</h3>
-              <p>Connected to your path or next interview</p>
+              <h3>Learning</h3>
             </div>
           </div>
           <ul className="today-learning-list">
